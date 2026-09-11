@@ -471,13 +471,17 @@
     }
 
     document.title = title;
-    const url = `${String(SITE.siteUrl).replace(/\/+$/, '')}/${location.hash || '#/home'}`;
+    const base = String(SITE.siteUrl).replace(/\/+$/, '') + '/';
+    // og:url 帶片段，分享出去才會直接開到那一頁；
+    // canonical 一律用不帶片段的網址 —— 所有路由本來就是同一份文件，
+    // 而且搜尋引擎會忽略帶片段的 canonical。
+    const shareUrl = base + (location.hash || '#/home');
     const set = (sel, attr, val) => { const n = $(sel); if (n) n.setAttribute(attr, val); };
     set('meta[name="description"]', 'content', desc);
     set('meta[property="og:title"]', 'content', title);
     set('meta[property="og:description"]', 'content', desc);
-    set('meta[property="og:url"]', 'content', url);
-    set('link[rel="canonical"]', 'href', url);
+    set('meta[property="og:url"]', 'content', shareUrl);
+    set('link[rel="canonical"]', 'href', base);
   }
 
   /* ------------------------- 渲染 ------------------------- */
