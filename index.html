@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Eric Wang — Profile</title>
+<meta name="description" content="Eric Wang (王誠佑) — Software Engineer / Network Systems / Machine Learning. UIUC MCS 2026." />
+<meta name="theme-color" content="#0b1622" />
+<meta name="robots" content="index, follow" />
+<meta name="author" content="Eric Wang" />
+<link rel="canonical" href="https://fattyyo.github.io/portfolio/" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Eric Wang — Profile" />
+<meta property="og:description" content="Software Engineer / Network Systems / Machine Learning" />
+<meta property="og:url" content="https://fattyyo.github.io/portfolio/" />
+<meta property="og:image" content="https://fattyyo.github.io/portfolio/assets/img/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230b1622'/%3E%3Cpath d='M3 11h5V5h5' stroke='%232a4459' stroke-width='1.5' fill='none'/%3E%3Crect x='1.5' y='9.5' width='3' height='3' fill='%23b8d4e6'/%3E%3Crect x='11.5' y='3.5' width='3' height='3' fill='%237ee0a8'/%3E%3C/svg%3E" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=B612:wght@400;700&family=B612+Mono:wght@400&family=Chiron+Hei+HK:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="./assets/css/style.css" />
+</head>
+<body>
+
+<!-- 檯面疊層：製圖方格 + 極淡掃描線 + 暈影 -->
+<div class="plate-grid" aria-hidden="true"></div>
+<div class="plate-scan" aria-hidden="true"></div>
+<div class="plate-vignette" aria-hidden="true"></div>
+
+<a class="skip-link" href="#main">跳至主要內容</a>
+
+<!-- 開機動畫 -->
+<div id="boot" class="boot" aria-hidden="true">
+  <pre class="boot-log"></pre>
+</div>
+
+<!-- 語言切換 -->
+<button class="lang-toggle" id="langToggle" type="button">EN</button>
+
+<!-- 左右翻頁箭頭（桌機） -->
+<button class="page-nav-arrow page-nav-left" id="navPrev" type="button" hidden>
+  <span class="arrow-icon" aria-hidden="true">◀</span>
+  <span class="arrow-label"></span>
+</button>
+<button class="page-nav-arrow page-nav-right" id="navNext" type="button" hidden>
+  <span class="arrow-label"></span>
+  <span class="arrow-icon" aria-hidden="true">▶</span>
+</button>
+
+<main id="main" class="view" tabindex="-1"></main>
+
+<!-- 底部像素導覽列 -->
+<nav class="dock" id="dock" aria-label="主導覽"></nav>
+
+<!-- 燈箱 -->
+<div class="modal" id="modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-frame" role="dialog" aria-modal="true" aria-label="媒體檢視">
+    <button class="modal-close" type="button" data-close aria-label="關閉">✕</button>
+    <div class="modal-body"></div>
+  </div>
+</div>
+
+
+<div class="fx-layer" id="fx" aria-hidden="true"></div>
+
+<script src="./assets/js/data.js"></script>
+<script src="./assets/js/app.js"></script>
+</body>
+</html>

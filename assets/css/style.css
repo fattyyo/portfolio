@@ -1,0 +1,989 @@
+/* =====================================================================
+   PIXEL PROFILE — Retro Macintosh / CRT theme
+   顏色、間距、圓角一律走 token，改主題只要動 :root
+   ===================================================================== */
+
+:root {
+  /* --- 色票：工程藍圖 ---
+     深製圖藍負責整個檯面，訊號綠是唯一的飽和色，只給「活著」的東西。
+     刻意不用暖褐＋琥珀，那組是別人的識別。 */
+  --bg-dark:      #0b1622;   /* 製圖檯面 */
+  --bg-medium:    #12212f;   /* 面板 */
+  --bg-light:     #1c2f42;   /* 凸起／控制項 */
+  --black:        #050b12;   /* 邊框與硬陰影 */
+  --white:        #dce8f0;   /* 冷白文字 */
+  --gray:         #8fa6b8;
+  --gray-dim:     #6f8699;   /* 在 --bg-medium 上 4.6:1 */
+  --accent:       #b8d4e6;   /* 結構色：藍圖墨 */
+  --accent-deep:  #7ea6c4;
+  --signal:       #7ee0a8;   /* 磷光綠：唯一飽和色，只給活的節點與連線 */
+  --signal-dim:   #3f7f62;
+  --success:      #7ee0a8;
+  --rule:         #1c2f42;   /* 分隔線 */
+  --warn:         #d9a441;
+  --danger:       #e0705f;
+
+  /* --- 字體 ---
+     B612 是 Airbus 為飛機駕駛艙儀表開發的字體，設計目標是眩光與震動下的判讀正確率。
+     中文明確指定昭源黑體，不再靠使用者的系統字體 ——
+     否則 Mac 看到蘋方、Windows 看到微軟正黑，樣子完全不受控。
+     後面仍保留系統中文字體，萬一 webfont 載入失敗還有正常的中文可看。 */
+  --font-display: "B612", "Chiron Hei HK", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-mono:    "B612 Mono", "Chiron Hei HK", "PingFang TC", "Microsoft JhengHei", ui-monospace, Menlo, monospace;
+
+  /* --- 間距（8px 節奏） --- */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 16px;
+  --sp-4: 24px; --sp-5: 32px; --sp-6: 48px; --sp-7: 64px;
+
+  /* --- 像素質感 --- */
+  --border-w: 4px;
+  --radius: 0;
+  --shadow-hard:  6px 6px 0 rgba(5, 11, 18, .55);
+  --shadow-hard-lg: 12px 12px 0 rgba(5, 11, 18, .6);
+  --shadow-press: 2px 2px 0 rgba(5, 11, 18, .6);
+
+  /* --- 動態 --- */
+  --dur-fast: 120ms;
+  --dur:      220ms;
+  --ease-out: cubic-bezier(.2,.8,.3,1);
+
+  /* --- 層級 --- */
+  --z-grid: 1; --z-content: 10; --z-nav: 40; --z-scan: 60; --z-modal: 100; --z-boot: 200;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* 元件若自行設定 display，會蓋掉瀏覽器內建的 [hidden]{display:none}；
+   篩選功能靠 el.hidden 運作，所以這條必須強制生效 */
+[hidden] { display: none !important; }
+
+html { scroll-behavior: smooth; overflow-x: hidden; }
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background-color: var(--bg-dark);
+  color: var(--white);
+  font-family: var(--font-mono);
+  font-size: 16.5px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  image-rendering: pixelated;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  padding-bottom: 124px;     /* 讓出底部 dock 空間 */
+}
+
+img { max-width: 100%; display: block; }
+svg { fill: currentColor; width: 20px; height: 20px; flex: 0 0 auto; }
+a { color: var(--accent); text-decoration: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+
+::selection { background: var(--accent); color: var(--black); }
+
+/* 捲軸 */
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: var(--bg-dark); }
+::-webkit-scrollbar-thumb { background: var(--bg-light); border: 2px solid var(--black); }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-deep); }
+
+/* 鍵盤焦點：像素外框，絕不拿掉 */
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: fixed; top: -100px; left: var(--sp-3);
+  z-index: var(--z-modal);
+  display: inline-flex; align-items: center; min-height: 44px;
+  background: var(--accent); color: var(--bg-dark);
+  padding: 0 var(--sp-3);
+  font-family: var(--font-display); font-size: .8rem; font-weight: 700; letter-spacing: 2px;
+  border: 1px solid var(--bg-dark);
+}
+.skip-link:focus { top: var(--sp-3); }
+
+/* ======================= 檯面疊層 =======================
+   方格是製圖紙，不是電視掃描線；掃描線壓到幾乎看不見，
+   只留一點螢幕感，避免整體讀成「復古電視」。
+   ======================================================== */
+.plate-grid, .plate-scan, .plate-vignette {
+  position: fixed; inset: 0; pointer-events: none;
+}
+.plate-grid {
+  z-index: var(--z-grid);
+  background-image:
+    linear-gradient(rgba(120, 170, 210, .055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 170, 210, .055) 1px, transparent 1px),
+    linear-gradient(rgba(120, 170, 210, .11) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 170, 210, .11) 1px, transparent 1px);
+  background-size: 22px 22px, 22px 22px, 110px 110px, 110px 110px;
+}
+.plate-scan {
+  z-index: var(--z-scan);
+  background: repeating-linear-gradient(
+    0deg, rgba(0, 0, 0, .14), rgba(0, 0, 0, .14) 1px, transparent 1px, transparent 5px);
+  opacity: .35;
+}
+.plate-vignette {
+  z-index: var(--z-scan);
+  background: radial-gradient(ellipse at 50% 40%, transparent 52%, rgba(2, 6, 11, .62) 100%);
+}
+
+/* ============================ 開機動畫 ============================ */
+.boot {
+  position: fixed; inset: 0; z-index: var(--z-boot);
+  background: var(--bg-dark);
+  display: grid; place-items: center;
+  padding: var(--sp-4);
+}
+.boot.is-done { opacity: 0; pointer-events: none; transition: opacity 400ms ease; }
+.boot-log {
+  font-family: var(--font-mono); font-size: 1.1rem;
+  color: var(--signal); margin: 0;
+  width: min(560px, 100%);
+  text-shadow: 0 0 8px rgba(126, 224, 168, .45);
+  white-space: pre-wrap;
+}
+.boot-log::after { content: "▋"; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ============================ 共用元件 ============================ */
+.view {
+  position: relative; z-index: var(--z-content);
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--sp-5) var(--sp-3) var(--sp-6);
+  outline: none;
+}
+
+/* 頁首 */
+.page-header { text-align: center; margin-bottom: var(--sp-5); }
+.pixel-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.05rem, .95rem + 1.3vw, 1.7rem); font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 2px;
+  line-height: 1.6;
+  margin: 0 0 var(--sp-2);
+  text-shadow: 3px 3px 0 var(--black), 0 0 2px rgba(175,175,175,.6);
+}
+.page-header .subtitle {
+  color: var(--gray); font-size: 1.1rem; letter-spacing: 1px; margin: 0;
+  text-shadow: 1px 1px 0 var(--black);
+}
+
+/* 像素卡片 */
+.pixel-card {
+  background: var(--bg-medium);
+  border: 1px solid var(--bg-light);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-hard);
+  transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out);
+}
+.pixel-card:hover {
+  transform: translate(-3px, -3px);
+  box-shadow: 9px 9px 0 rgba(5, 11, 18, .55);
+  border-color: var(--accent-deep);
+}
+
+/* 像素按鈕 */
+.pixel-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: var(--sp-2);
+  min-height: 44px; padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-light);
+  color: var(--white);
+  border: 1px solid var(--accent-deep);
+  border-radius: 0;
+  box-shadow: var(--shadow-press);
+  font-family: var(--font-display); font-size: .76rem; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase;
+  transition: background var(--dur-fast), transform var(--dur-fast), box-shadow var(--dur-fast), color var(--dur-fast);
+}
+.pixel-btn:hover { background: var(--accent); color: var(--bg-dark); border-color: var(--accent); }
+.pixel-btn:active { transform: translate(2px, 2px); box-shadow: none; }
+.pixel-btn.is-active { background: var(--signal); border-color: var(--signal); color: var(--bg-dark); }
+.pixel-btn[disabled] { opacity: .4; cursor: not-allowed; }
+
+.filter-bar {
+  display: flex; flex-wrap: wrap; gap: var(--sp-2);
+  justify-content: center; margin-bottom: var(--sp-4);
+}
+
+/* 空狀態 */
+.empty-state {
+  text-align: center; color: var(--gray);
+  border: var(--border-w) dashed var(--bg-light);
+  border-radius: var(--radius);
+  padding: var(--sp-6) var(--sp-3);
+}
+.empty-state strong { display: block; font-family: var(--font-display); font-size: .88rem; font-weight: 700; color: var(--accent); margin-bottom: var(--sp-2); }
+
+/* ============================ 首頁 ============================ */
+.home { padding-top: 0; }
+
+/* --- 儀器面板 ---
+   取代原本的木框佈告欄。轉角是製圖用的定位十字，不是圖釘；
+   頂部是絹印標籤條，右側一顆狀態燈。 */
+.panel { display: flex; justify-content: center; margin-top: var(--sp-3); }
+
+.panel-frame {
+  position: relative;
+  width: min(980px, 100%);
+  background: var(--bg-medium);
+  border: 2px solid var(--bg-light);
+  outline: 1px solid var(--black);
+  outline-offset: 5px;
+  box-shadow: 0 0 0 1px rgba(120,170,210,.08) inset, 14px 14px 0 rgba(5,11,18,.55);
+  padding: 0;
+  animation: riseIn 620ms var(--ease-out) both;
+}
+
+/* 製圖定位十字 */
+.reg {
+  position: absolute; width: 15px; height: 15px; opacity: .8;
+  background:
+    linear-gradient(var(--accent-deep), var(--accent-deep)) center/1px 100% no-repeat,
+    linear-gradient(var(--accent-deep), var(--accent-deep)) center/100% 1px no-repeat;
+}
+.reg-tl { top: -12px; left: -12px; }  .reg-tr { top: -12px; right: -12px; }
+.reg-bl { bottom: -12px; left: -12px; } .reg-br { bottom: -12px; right: -12px; }
+
+/* 絹印標籤條 */
+.panel-strip {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-dark);
+  border-bottom: 2px solid var(--bg-light);
+  font-family: var(--font-display); font-size: .78rem; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.strip-label { color: var(--accent); }
+.strip-code  { color: var(--gray-dim); font-family: var(--font-mono); font-size: .8rem; letter-spacing: 1px; text-transform: none; }
+.strip-led {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 7px;
+  color: var(--signal); font-size: .55rem;
+}
+.strip-led i {
+  width: 8px; height: 8px; background: var(--signal); display: block;
+  box-shadow: 0 0 7px var(--signal);
+  animation: led 2.4s ease-in-out infinite;
+}
+@keyframes led { 50% { opacity: .35; } }
+
+.panel-body {
+  display: flex; align-items: flex-start; gap: var(--sp-5);
+  padding: var(--sp-5) var(--sp-4);
+}
+.panel-screen {
+  flex: 0 0 auto; width: 148px; height: 148px;
+  border: 2px solid var(--bg-light);
+  background: var(--bg-dark);
+  box-shadow: 0 0 0 1px var(--black) inset;
+  overflow: hidden; padding: 5px;
+}
+.panel-screen img { width: 100%; height: 100%; object-fit: cover; }
+
+.panel-info { min-width: 0; }
+.panel-info h1 {
+  font-family: var(--font-display);
+  font-size: clamp(1.45rem, 1.05rem + 2vw, 2.5rem); font-weight: 700;
+  line-height: 1.4; margin: 0 0 var(--sp-2);
+  color: var(--white); letter-spacing: 1px;
+}
+.panel-info .name-zh {
+  display: block; font-family: var(--font-mono); font-weight: 500;
+  font-size: .62em; color: var(--accent); margin-top: var(--sp-2); letter-spacing: 3px;
+}
+.tagline {
+  font-size: 1.02rem; color: var(--accent);
+  letter-spacing: .5px; margin: 0 0 var(--sp-3);
+}
+.profile-description { color: var(--gray); max-width: 66ch; margin: 0 0 var(--sp-4); }
+
+.social-links { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.social-link {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  min-height: 44px; padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-light); color: var(--white);
+  border: 1px solid var(--bg-light); border-radius: 0;
+  font-size: .92rem; letter-spacing: 1px;
+  transition: background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast);
+}
+.social-link:hover { background: var(--bg-dark); color: var(--signal); border-color: var(--signal-dim); }
+.social-link svg { width: 18px; height: 18px; fill: currentColor; }
+
+/* 首頁狀態列 */
+.status-strip {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--sp-2); margin: var(--sp-5) auto 0; max-width: 980px;
+}
+.status-chip {
+  border: 1px solid var(--bg-light);
+  background: var(--bg-medium);
+  padding: var(--sp-2) var(--sp-3); font-size: .95rem;
+  border-left: 3px solid var(--accent-deep);
+}
+.status-chip b {
+  color: var(--gray-dim); font-family: var(--font-display); font-size: .7rem; font-weight: 700;
+  display: block; margin-bottom: 5px; letter-spacing: 2px;
+}
+
+.start-prompt {
+  text-align: center; margin: var(--sp-5) 0 var(--sp-6);
+  color: var(--gray-dim); font-size: .95rem; letter-spacing: 2px;
+}
+
+/* ==================== Me / 概覽與完整記錄 ==================== */
+.overview { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-5); }
+.overview-block { padding: var(--sp-3) var(--sp-4); }
+.overview-block h3 {
+  font-family: var(--font-display); font-size: .84rem; font-weight: 700; color: var(--accent);
+  margin: 0 0 var(--sp-3); letter-spacing: 2px; line-height: 1.6;
+  text-transform: uppercase;
+}
+.overview-block ul { margin: 0; padding-left: 1.1em; }
+.overview-block li { margin-bottom: var(--sp-2); color: var(--gray); }
+
+/* 完整記錄：拓撲圖每個節點攤開的版本 */
+.records { margin-top: var(--sp-6); display: grid; gap: 0; }
+.record { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: var(--sp-3); }
+.record-rail { position: relative; }
+.record-rail::before {
+  content: ""; position: absolute; left: 50%; top: 0; bottom: 0;
+  width: 1px; background: var(--bg-light); transform: translateX(-50%);
+}
+.record:first-child .record-rail::before { top: 26px; }
+.record:last-child  .record-rail::before { bottom: calc(100% - 26px); }
+.record-rail span {
+  position: absolute; left: 50%; top: 20px;
+  width: 11px; height: 11px; transform: translateX(-50%);
+  background: var(--bg-medium); border: 2px solid var(--gray-dim);
+}
+.record.is-active .record-rail span { background: var(--signal); border-color: var(--signal); }
+.record.is-next   .record-rail span { border-color: var(--signal); }
+.record.is-active .record-rail::before,
+.record.is-next   .record-rail::before { background: var(--signal-dim); }
+
+.record-body { padding: var(--sp-3) 0 var(--sp-5); border-bottom: 1px solid var(--rule, var(--bg-light)); }
+.record:last-child .record-body { border-bottom: 0; }
+.record-head {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+.record-n { color: var(--gray-dim); font-size: .85rem; letter-spacing: 1px; }
+.record-label {
+  font-family: var(--font-display); font-size: .74rem; font-weight: 700; letter-spacing: 2px; color: var(--accent);
+}
+.record.is-active .record-label, .record.is-next .record-label { color: var(--signal); }
+.record-period { color: var(--gray-dim); font-size: .88rem; letter-spacing: 1px; }
+.record-body h3 {
+  font-family: var(--font-mono); font-weight: 600; font-size: 1.22rem;
+  color: var(--white); margin: 0 0 var(--sp-2); line-height: 1.45;
+}
+.record-body p { color: var(--gray); margin: 0 0 var(--sp-3); max-width: 70ch; }
+
+/* 從拓撲圖點過來時短暫標示 */
+.record.is-focus .record-body {
+  box-shadow: -3px 0 0 var(--signal);
+  padding-left: var(--sp-3);
+  transition: box-shadow var(--dur), padding var(--dur);
+}
+
+/* ============================ Coding / 專案 ============================ */
+.projects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--sp-4); }
+.project-card { display: flex; flex-direction: column; padding: var(--sp-4); }
+.project-card h3 { font-family: var(--font-mono); font-size: 1.45rem; line-height: 1.4; letter-spacing: 1px; color: var(--accent); margin: 0 0 var(--sp-3); }
+.project-card p { color: var(--gray); margin: 0 0 var(--sp-3); flex: 1; }
+.project-tech { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: var(--sp-3); }
+.tech-tag {
+  font-size: .95rem; padding: 2px var(--sp-2);
+  background: var(--bg-dark); color: var(--accent);
+  border: 2px solid var(--bg-light); border-radius: 4px;
+}
+.project-links { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+/* ============================ Photos ============================ */
+.photos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--sp-3); }
+.photo-card { overflow: hidden; padding: 0; text-align: left; width: 100%; background: var(--bg-medium); }
+.photo-thumb { position: relative; aspect-ratio: 4 / 3; background: var(--bg-light); overflow: hidden; }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform var(--dur) var(--ease-out); }
+.photo-card:hover .photo-thumb img { transform: scale(1.06); }
+.photo-meta { padding: var(--sp-2) var(--sp-3) var(--sp-3); border-top: 3px solid var(--black); }
+.photo-meta h3 { font-size: 1.15rem; margin: 0 0 2px; color: var(--white); }
+.photo-meta .meta-row { display: flex; justify-content: space-between; gap: var(--sp-2); color: var(--gray-dim); font-size: 1rem; }
+
+/* ============================ Videos ============================ */
+.videos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--sp-4); }
+.video-card { overflow: hidden; padding: 0; text-align: left; width: 100%; background: var(--bg-medium); }
+.video-thumb { position: relative; aspect-ratio: 16 / 9; background: var(--bg-light); overflow: hidden; }
+.video-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.video-thumb::after {
+  content: "▶"; position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: 2rem; color: var(--white);
+  background: rgba(5, 11, 18, .55); text-shadow: 2px 2px 0 var(--black);
+  transition: background var(--dur), color var(--dur);
+}
+.video-card:hover .video-thumb::after { background: rgba(5, 11, 18, .25); color: var(--signal); }
+.video-meta { padding: var(--sp-3); border-top: 3px solid var(--black); }
+.video-meta h3 { font-size: 1.2rem; margin: 0 0 var(--sp-1); color: var(--white); }
+.video-meta p { margin: 0; color: var(--gray-dim); font-size: 1.05rem; }
+
+/* ============================ Contact ============================ */
+.contact-card { max-width: 640px; margin: 0 auto; padding: var(--sp-5); text-align: center; }
+.contact-card p { color: var(--gray); }
+.contact-list { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-4); }
+
+/* ============================ 導覽 ============================ */
+.dock {
+  position: fixed; left: 50%; bottom: var(--sp-3); transform: translateX(-50%);
+  z-index: var(--z-nav);
+  display: flex; gap: var(--sp-2);
+  padding: var(--sp-2);
+  background: rgba(18, 33, 47, .94);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  border: 1px solid var(--bg-light);
+  border-radius: 0;
+  box-shadow: var(--shadow-hard);
+  max-width: calc(100vw - var(--sp-4));
+  overflow-x: auto;
+}
+.dock-item {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  min-width: 64px; min-height: 52px; padding: var(--sp-1) var(--sp-2);
+  background: transparent; border: 1px solid transparent; border-radius: 0;
+  color: var(--gray);
+  font-family: var(--font-display); font-size: .7rem; font-weight: 700; letter-spacing: 1px;
+  transition: background var(--dur-fast), color var(--dur-fast), transform var(--dur-fast);
+  white-space: nowrap;
+}
+.dock-item svg { width: 20px; height: 20px; fill: currentColor; }
+.dock-item:hover { color: var(--white); background: var(--bg-light); }
+.dock-item[aria-current="page"] {
+  color: var(--bg-dark); background: var(--accent); border-color: var(--accent);
+}
+
+/* 桌機左右翻頁 */
+.page-nav-arrow {
+  position: fixed; top: 50%; transform: translateY(-50%);
+  z-index: var(--z-nav);
+  display: flex; align-items: center; gap: var(--sp-2);
+  min-height: 48px; padding: var(--sp-2) var(--sp-3);
+  background: rgba(18, 33, 47, .94);
+  border: 1px solid var(--bg-light); border-radius: 0;
+  box-shadow: var(--shadow-press);
+  color: var(--gray);
+  font-family: var(--font-display); font-size: .7rem; font-weight: 700; letter-spacing: 2px;
+  transition: color var(--dur-fast), background var(--dur-fast), transform var(--dur-fast);
+}
+.page-nav-left  { left: var(--sp-3); }
+.page-nav-right { right: var(--sp-3); }
+/* 視窗不夠寬時不顯示側邊箭頭，避免壓到內容（仍可用方向鍵與底部選單） */
+@media (max-width: 1199px) { .page-nav-arrow { display: none !important; } }
+@media (max-width: 1439px) { .page-nav-arrow .arrow-label { display: none; } }
+.page-nav-arrow:hover { color: var(--bg-dark); background: var(--accent); border-color: var(--accent); }
+.page-nav-left:hover  { transform: translateY(-50%) translateX(-4px); }
+.page-nav-right:hover { transform: translateY(-50%) translateX(4px); }
+
+/* ============================ 燈箱 ============================ */
+.modal { position: fixed; inset: 0; z-index: var(--z-modal); display: grid; place-items: center; padding: var(--sp-3); }
+.modal[hidden] { display: none; }
+.modal-backdrop { position: absolute; inset: 0; background: rgba(10,8,6,.82); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.modal-frame {
+  position: relative; width: min(960px, 100%); max-height: 90dvh; overflow: auto;
+  background: var(--bg-medium);
+  border: 1px solid var(--accent-deep); border-radius: var(--radius);
+  box-shadow: var(--shadow-hard-lg);
+  padding: var(--sp-4);
+  animation: riseIn 220ms var(--ease-out) both;
+}
+.modal-close {
+  position: absolute; top: var(--sp-2); right: var(--sp-2);
+  width: 44px; height: 44px;
+  background: var(--bg-light); border: 1px solid var(--accent-deep); border-radius: 0;
+  color: var(--white); font-size: 1.2rem;
+}
+.modal-close:hover { background: var(--danger); }
+.modal-body img { width: 100%; border: 3px solid var(--black); border-radius: 8px; }
+.modal-body iframe { width: 100%; aspect-ratio: 16 / 9; border: 3px solid var(--black); border-radius: 8px; }
+.modal-body h3 { font-family: var(--font-mono); font-size: 1.45rem; letter-spacing: 1px; color: var(--accent); line-height: 1.4; margin: var(--sp-3) 0 var(--sp-2); }
+.modal-body .meta-row { display: flex; flex-wrap: wrap; gap: var(--sp-3); color: var(--gray-dim); }
+
+@keyframes riseIn { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.stagger > * { animation: fadeUp 420ms var(--ease-out) both; }
+
+/* ============================ RWD ============================ */
+@media (max-width: 900px) {
+  .page-nav-arrow { display: none; }
+  .panel-body { flex-direction: column; text-align: center; gap: var(--sp-4); align-items: center; }
+  .profile-description { margin-inline: auto; }
+  .social-links { justify-content: center; }
+
+
+}
+
+@media (max-width: 600px) {
+  body { font-size: 16px; padding-bottom: 190px; }
+  .view { padding: var(--sp-4) var(--sp-3) var(--sp-5); }
+  .panel-frame { outline-offset: 3px; }
+  .panel-body { padding: var(--sp-4) var(--sp-3); }
+  .panel-screen { width: 118px; height: 118px; }
+  .panel-strip { flex-wrap: wrap; gap: var(--sp-2); font-size: .5rem; }
+  .strip-led { margin-left: 0; }
+  .reg { display: none; }
+  .photos-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .dock {
+    gap: var(--sp-1); padding: var(--sp-1);
+    flex-wrap: wrap; justify-content: center;
+    max-width: calc(100vw - var(--sp-4)); overflow-x: visible;
+  }
+  .dock-item { min-width: 58px; padding: var(--sp-1) var(--sp-1); font-size: .42rem; letter-spacing: 0; }
+  .dock-item svg { width: 18px; height: 18px; }
+  .status-chip { width: 100%; }
+}
+
+/* ============================ 無障礙：減少動態 ============================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .plate-scan { opacity: .3; }
+  .pixel-card:hover { transform: none; }
+}
+
+@media print {
+  .plate-grid, .plate-scan, .plate-vignette, .dock, .page-nav-arrow, .boot { display: none !important; }
+  body { background: #fff; color: #000; padding: 0; }
+}
+
+/* =====================================================================
+   以下為後續新增：語言切換、Blog、快捷鍵面板、彩蛋
+   ===================================================================== */
+
+/* ---------------- 語言切換鈕 ---------------- */
+.lang-toggle {
+  position: fixed; top: var(--sp-3); right: var(--sp-3);
+  z-index: var(--z-nav);
+  min-width: 48px; min-height: 44px;
+  background: rgba(18, 33, 47, .94);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  border: 1px solid var(--bg-light); border-radius: 0;
+  box-shadow: var(--shadow-press);
+  color: var(--accent);
+  font-family: var(--font-display); font-size: .84rem; font-weight: 700; letter-spacing: 2px;
+  transition: background var(--dur-fast), color var(--dur-fast), transform var(--dur-fast);
+}
+.lang-toggle:hover { background: var(--accent); color: var(--bg-dark); border-color: var(--accent); }
+.lang-toggle:active { transform: translate(2px, 2px); box-shadow: none; }
+
+/* ---------------- Blog：文章列表 ---------------- */
+.posts-list { display: grid; gap: var(--sp-3); }
+.post-card {
+  display: block; padding: var(--sp-4);
+  color: inherit; text-decoration: none;
+}
+.post-card h3 {
+  font-family: var(--font-mono); font-size: 1.5rem; line-height: 1.4;
+  letter-spacing: 1px;
+  color: var(--white); margin: var(--sp-2) 0 var(--sp-2);
+  text-wrap: balance;
+}
+.post-card p { color: var(--gray); margin: 0 0 var(--sp-3); max-width: 70ch; }
+.post-card:hover h3 { color: var(--accent); }
+
+.post-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
+  color: var(--gray-dim); font-size: 1rem;
+}
+.post-meta time { font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+.post-more {
+  display: inline-block;
+  font-family: var(--font-mono); font-size: 1.1rem; letter-spacing: 2px;
+  color: var(--accent);
+}
+
+/* ---------------- Blog：文章內頁 ---------------- */
+.post-view { max-width: 74ch; margin: 0 auto; }
+.back-link { margin-bottom: var(--sp-4); }
+.post-head { margin-bottom: var(--sp-5); }
+.post-title {
+  font-family: var(--font-mono);
+  font-size: clamp(1.7rem, 1.4rem + 1.4vw, 2.4rem);
+  line-height: 1.35; letter-spacing: 1px;
+  color: var(--white); text-align: left;
+  margin: var(--sp-3) 0 0; text-wrap: balance;
+  text-shadow: 2px 2px 0 var(--black);
+}
+.post-body { color: var(--white); }
+.post-body p { margin: 0 0 var(--sp-4); }
+.post-body h3 {
+  font-family: var(--font-mono); font-size: 1.55rem; line-height: 1.4;
+  letter-spacing: 1px; color: var(--accent);
+  border-left: 4px solid var(--accent); padding-left: var(--sp-3);
+  margin: var(--sp-6) 0 var(--sp-3);
+}
+.post-body h4 {
+  font-size: 1.25rem; color: var(--accent);
+  margin: var(--sp-5) 0 var(--sp-2);
+}
+.post-body ul { margin: 0 0 var(--sp-4); padding-left: 1.3em; }
+.post-body li { margin-bottom: var(--sp-2); color: var(--gray); }
+.post-body a { text-decoration: underline; text-underline-offset: 3px; }
+.post-body code {
+  background: var(--bg-dark); color: var(--accent);
+  border: 2px solid var(--bg-light); border-radius: 4px;
+  padding: 1px 6px; font-size: .95em;
+}
+.post-body .md-code {
+  background: var(--bg-dark);
+  border: 3px solid var(--black); border-radius: 8px;
+  box-shadow: var(--shadow-press);
+  padding: var(--sp-3);
+  margin: 0 0 var(--sp-4);
+  overflow-x: auto;                     /* 長程式碼自己捲，頁面不會橫向滑動 */
+}
+.post-body .md-code code {
+  background: none; border: 0; padding: 0;
+  color: var(--white); font-size: 1.05rem; line-height: 1.6;
+  white-space: pre;
+}
+
+/* ---------------- 快捷鍵面板 ---------------- */
+.shortcut-list { margin: var(--sp-4) 0 0; display: grid; gap: var(--sp-2); }
+.shortcut-list > div {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 2px solid var(--bg-light);
+}
+.shortcut-list dt { flex: 0 0 110px; margin: 0; }
+.shortcut-list dd { margin: 0; color: var(--gray); }
+kbd {
+  display: inline-block;
+  background: var(--bg-dark); color: var(--accent);
+  border: 2px solid var(--bg-light); border-radius: 5px;
+  box-shadow: 0 2px 0 var(--black);
+  padding: 3px 9px;
+  font-family: var(--font-display); font-size: .74rem; font-weight: 700;
+}
+
+/* ---------------- 提示訊息 ---------------- */
+.toast {
+  position: fixed; left: 50%; bottom: 108px; transform: translateX(-50%);
+  z-index: var(--z-modal);
+  background: var(--accent); color: var(--black);
+  border: 3px solid var(--black); border-radius: 8px;
+  box-shadow: var(--shadow-hard);
+  padding: var(--sp-2) var(--sp-4);
+  font-family: var(--font-display); font-size: .78rem; font-weight: 700; letter-spacing: 1px;
+  animation: riseIn 220ms var(--ease-out) both;
+}
+
+/* ---------------- 彩蛋：Konami code ---------------- */
+body.konami .plate-scan { opacity: 1; }
+body.konami .view,
+body.konami .dock,
+body.konami .lang-toggle { animation: hueShift 6s linear infinite; }
+@keyframes hueShift { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(360deg); } }
+
+/* 技術標籤現在是可點的按鈕 */
+button.tech-tag {
+  cursor: pointer; font-family: var(--font-mono);
+  position: relative; min-height: 32px;
+  transition: background var(--dur-fast), color var(--dur-fast), border-color var(--dur-fast);
+}
+/* 標籤視覺上是小晶片，但點擊區擴到 44px —— 手指點得到，版面不變胖 */
+button.tech-tag::after { content: ""; position: absolute; inset: -6px; }
+button.tech-tag:hover { background: var(--accent); color: var(--black); border-color: var(--black); }
+
+@media (max-width: 900px) { .lang-toggle { top: auto; bottom: 116px; right: var(--sp-3); } }
+@media (max-width: 600px) { .lang-toggle { bottom: 172px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  body.konami .view, body.konami .dock, body.konami .lang-toggle { animation: none; }
+}
+
+@media print {
+  .lang-toggle, .toast { display: none !important; }
+}
+
+
+/* =====================================================================
+   中文模式的字體修正
+   B612 / B612 Mono 都沒有中文字模，中文會落到字體堆疊裡的昭源黑體。
+   現有字級是照英文大寫標籤挑的，中文套上去偏小，所以統一放大一階。
+   （中英混排時切成等寬，讓 Latin 部分對齊）
+   ===================================================================== */
+:root[lang="zh-TW"] .pixel-title {
+  font-size: clamp(1.35rem, 1.15rem + 1.3vw, 2rem);
+  letter-spacing: 5px; line-height: 1.45;
+}
+:root[lang="zh-TW"] .pixel-btn,
+:root[lang="zh-TW"] .hop-link,
+:root[lang="zh-TW"] .dock-item,
+:root[lang="zh-TW"] .page-nav-arrow {
+  font-family: var(--font-mono); letter-spacing: 1.5px;
+}
+:root[lang="zh-TW"] .pixel-btn,
+:root[lang="zh-TW"] .hop-link       { font-size: .95rem; }
+:root[lang="zh-TW"] .dock-item      { font-size: .86rem; }
+:root[lang="zh-TW"] .page-nav-arrow { font-size: .9rem; }
+:root[lang="zh-TW"] .strip-label,
+:root[lang="zh-TW"] .overview-block h3 { font-size: .95rem; letter-spacing: 2px; }
+
+@media (max-width: 600px) {
+  :root[lang="zh-TW"] .dock-item { font-size: .8rem; letter-spacing: .5px; }
+}
+
+/* 英文模式下語言鈕顯示「中」，B612 沒有中文字模，交給昭源黑體並放大 */
+:root[lang="en"] .lang-toggle { font-family: var(--font-mono); font-size: 1.15rem; }
+
+/* =====================================================================
+   生涯拓撲圖
+   視覺語源是 80–90 年代的網管主控台：方塊節點、直角走線、
+   磷光綠表示 link up。琥珀色負責結構，綠色只給「活的」東西。
+   ===================================================================== */
+.topo { margin-top: var(--sp-6); }
+
+.topo-bar {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  justify-content: space-between; gap: var(--sp-2);
+  border-bottom: 3px solid var(--black);
+  padding-bottom: var(--sp-2); margin-bottom: var(--sp-4);
+}
+.topo-bar h2 {
+  font-family: var(--font-display); font-size: .95rem; font-weight: 700; letter-spacing: 2px;
+  color: var(--accent); margin: 0;
+  text-shadow: 2px 2px 0 var(--black);
+}
+.topo-readout { font-size: 1.05rem; color: var(--gray-dim); letter-spacing: 1px; }
+.topo-readout b { color: var(--signal); font-weight: 400; }
+
+/* --- 圖面 --- */
+.topo-stage {
+  position: relative;
+  max-height: min(54vh, 440px);
+  margin-inline: auto;          /* 高度受限時會等比縮寬，置中才不會偏一邊 */
+  background: var(--bg-dark);
+  border: 1px solid var(--bg-light);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-hard);
+  overflow: visible;
+}
+.topo-wires { position: absolute; inset: 0; width: 100%; height: 100%; }
+.topo-wires .grid path { stroke: rgba(175, 175, 175, .07); stroke-width: .5; fill: none; }
+
+.wire {
+  fill: none; stroke: var(--bg-light); stroke-width: 2.5;
+  stroke-linejoin: miter; stroke-linecap: square;
+  vector-effect: non-scaling-stroke;
+}
+.wire.is-live {
+  stroke: var(--signal-dim);
+  stroke-dasharray: 6 4;
+  animation: flow 1.4s linear infinite;
+}
+@keyframes flow { to { stroke-dashoffset: -20; } }
+
+/* --- 節點：真的 <button>，疊在 SVG 上方 --- */
+.topo-node {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  min-width: 44px; min-height: 44px; padding: 0;
+  background: none; border: 0;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.topo-dot {
+  width: 22px; height: 22px;
+  background: var(--bg-medium);
+  border: 4px solid var(--gray-dim);
+  box-shadow: 3px 3px 0 var(--black);
+  transition: background var(--dur-fast), border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.topo-label {
+  font-family: var(--font-display); font-size: .7rem; font-weight: 700; letter-spacing: 1px;
+  color: var(--gray); white-space: nowrap;
+  /* 加底板，走線才不會從字中間穿過去 */
+  background: var(--bg-dark);
+  padding: 3px 5px;
+  box-shadow: 0 0 0 2px var(--bg-dark);
+  transition: color var(--dur-fast);
+}
+
+/* 依類型換形狀：學歷=方、工作=菱、專案=圓角 */
+.topo-node.kind-work  .topo-dot { transform: rotate(45deg); }
+.topo-node.kind-project .topo-dot { border-radius: 50%; }
+
+/* 依狀態換顏色 */
+.topo-node.is-active .topo-dot { background: var(--signal); border-color: var(--signal); }
+.topo-node.is-active .topo-label { color: var(--signal); }
+.topo-node.is-next   .topo-dot { background: var(--bg-dark); border-color: var(--signal); }
+.topo-node.is-next   .topo-label { color: var(--signal); }
+
+/* 進行中的節點有脈衝環 */
+.topo-node.is-active::before {
+  content: ""; position: absolute; top: 11px; left: 50%;
+  width: 38px; height: 38px; margin: -19px 0 0 -19px;
+  border: 2px solid var(--signal);
+  animation: ping 2s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes ping {
+  0%   { transform: scale(.55); opacity: .9; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+.topo-node:hover .topo-dot,
+.topo-node:focus-visible .topo-dot { border-color: var(--accent); box-shadow: 4px 4px 0 var(--black); }
+.topo-node:hover .topo-label { color: var(--accent); }
+.topo-node:hover { transform: translate(-50%, -50%) scale(1.08); }
+
+/* 選中只加外框，不改填色 —— 綠色必須保留「這是活的」這個語意 */
+.topo-node.is-selected .topo-dot {
+  border-color: var(--white);
+  box-shadow: 0 0 0 3px var(--accent), 5px 5px 0 var(--black);
+}
+.topo-node.is-selected:not(.is-active):not(.is-next) .topo-dot { background: var(--accent-deep); }
+.topo-node.is-selected .topo-label { color: var(--white); }
+
+.topo-hint {
+  text-align: center; color: var(--gray-dim);
+  font-size: 1.05rem; letter-spacing: 1px; margin: var(--sp-3) 0 0;
+}
+
+/* --- 節點詳情 --- */
+.topo-detail { margin-top: var(--sp-4); min-height: 190px; }
+.topo-card { padding: var(--sp-4); animation: fadeUp 260ms var(--ease-out) both; }
+.topo-card-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.tag-kind, .tag-state {
+  font-size: 1rem; letter-spacing: 1px; padding: 1px var(--sp-2);
+  border: 2px solid var(--bg-light); border-radius: 4px; color: var(--gray);
+}
+.tag-state.is-active { border-color: var(--signal); color: var(--signal); }
+.tag-state.is-next   { border-color: var(--signal-dim); color: var(--signal); }
+.topo-period { color: var(--gray-dim); letter-spacing: 1px; margin-left: auto; }
+.topo-card h3 {
+  font-family: var(--font-mono); font-size: 1.5rem; letter-spacing: 1px;
+  color: var(--accent); margin: 0 0 var(--sp-2); line-height: 1.4;
+}
+.topo-card p { color: var(--gray); margin: 0 0 var(--sp-3); max-width: 68ch; }
+
+/* --- 手機：拓撲圖收合成 traceroute --- */
+.trace { display: none; list-style: none; margin: 0; padding: 0; }
+.trace-hop {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  grid-template-areas: "n label period" "n title title" "n detail detail" "n link link";
+  gap: 2px var(--sp-3); align-items: baseline;
+  padding: var(--sp-3) 0 var(--sp-3) var(--sp-3);
+  border-left: 3px solid var(--bg-light);
+  position: relative;
+}
+.trace-hop::before {
+  content: ""; position: absolute; left: -8px; top: 22px;
+  width: 13px; height: 13px;
+  background: var(--bg-medium); border: 3px solid var(--gray-dim);
+}
+.trace-hop.is-active::before,
+.trace-hop.is-next::before { border-color: var(--signal); }
+.trace-hop.is-active::before { background: var(--signal); }
+.trace-hop.is-active, .trace-hop.is-next { border-left-color: var(--signal-dim); }
+
+.hop-n { grid-area: n; font-family: var(--font-mono); color: var(--gray-dim); letter-spacing: 1px; }
+.hop-label {
+  grid-area: label; font-family: var(--font-display); font-size: .72rem; font-weight: 700;
+  letter-spacing: 1px; color: var(--accent);
+}
+.trace-hop.is-active .hop-label, .trace-hop.is-next .hop-label { color: var(--signal); }
+.hop-title { grid-area: title; color: var(--white); }
+.hop-detail { grid-area: detail; color: var(--gray-dim); font-size: 1.02rem; margin-top: 2px; }
+.hop-link {
+  grid-area: link; justify-self: start; margin-top: var(--sp-2);
+  display: inline-flex; align-items: center;
+  min-height: 44px; padding: 0 var(--sp-3);          /* 觸控區至少 44px */
+  border: 1px solid var(--accent-deep);
+  font-family: var(--font-display); font-size: .74rem; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--accent);
+}
+.hop-link:hover { background: var(--accent); color: var(--bg-dark); }
+.hop-label { padding: 2px 0; }
+.hop-period { grid-area: period; color: var(--gray-dim); font-size: 1rem; letter-spacing: 1px; }
+
+@media (max-width: 760px) {
+  .topo-stage, .topo-hint { display: none; }
+  .trace { display: block; }
+  .topo-detail { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wire.is-live { animation: none; stroke-dasharray: none; }
+  .topo-node.is-active::before { animation: none; opacity: .4; }
+  .topo-node:hover { transform: translate(-50%, -50%); }
+}
+
+@media print {
+  .topo-stage, .topo-hint { display: none !important; }
+  .trace { display: block !important; }
+}
+
+/* Me 頁的精簡拓撲圖：不重複顯示詳情卡與 traceroute */
+.trace.is-hidden { display: none; }
+@media (max-width: 760px) {
+  .trace.is-hidden { display: none; }
+  .me .topo-stage { display: none; }
+}
+
+/* 篩選時不符合的節點淡出，但連線保留，拓撲結構不會斷掉 */
+.topo-node.is-dim { opacity: .22; pointer-events: none; }
+.topo-node { transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur); }
+
+/* =====================================================================
+   點擊特效：封包爆發
+   封包沿直角路徑跑（跟拓撲圖走線同一套規則），ping 環是方形不是圓形。
+   ===================================================================== */
+.fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: var(--z-scan); }
+.burst { position: absolute; width: 0; height: 0; }
+
+/* 方形 ping 環 */
+.ping {
+  position: absolute; left: -5px; top: -5px;
+  width: 10px; height: 10px;
+  border: 1px solid var(--accent);
+  animation: ping-sq 460ms cubic-bezier(.15, .7, .3, 1) forwards;
+}
+@keyframes ping-sq {
+  from { transform: scale(.6); opacity: .85; }
+  to   { transform: scale(5.2); opacity: 0; }
+}
+
+/* 封包 */
+.pkt {
+  position: absolute; left: -2px; top: -2px;
+  width: 4px; height: 4px;
+  background: var(--accent);
+  animation: pkt-axis 520ms cubic-bezier(.2, .75, .25, 1) forwards;
+}
+.pkt.is-live { background: var(--signal); }
+.pkt.is-elbow { animation-name: pkt-elbow; animation-duration: 620ms; }
+
+@keyframes pkt-axis {
+  from { transform: translate(0, 0); opacity: 1; }
+  to   { transform: translate(var(--dx), var(--dy)); opacity: 0; }
+}
+/* 先沿 X 走，再轉直角沿 Y 走 —— 跟拓撲圖的 Manhattan routing 一樣 */
+@keyframes pkt-elbow {
+  0%   { transform: translate(0, 0); opacity: 1; }
+  45%  { transform: translate(var(--dx), 0); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) { .fx-layer { display: none; } }
+@media print { .fx-layer { display: none !important; } }

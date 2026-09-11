@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+
+Sitemap: https://fattyyo.github.io/portfolio/sitemap.xml
