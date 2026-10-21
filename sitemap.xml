@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://fattyyo.com/portfolio/</loc>
-    <changefreq>monthly</changefreq>
-    <priority>1.0</priority>
-  </url>
-</urlset>
+<!-- 全站 sitemap 索引：作品集 + 部落格 -->
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>https://fattyyo.com/sitemap-portfolio.xml</loc></sitemap>
+  <sitemap><loc>https://fattyyo.com/blog/sitemap.xml</loc></sitemap>
+</sitemapindex>

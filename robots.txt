@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 
 
-Sitemap: https://fattyyo.com/portfolio/sitemap.xml
+Sitemap: https://fattyyo.com/sitemap.xml

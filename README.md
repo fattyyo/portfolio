@@ -1,6 +1,6 @@
 # Eric Wang — Portfolio
 
-個人網站，線上網址：**https://fattyyo.com/portfolio/**
+個人網站，線上網址：**https://fattyyo.com/**（部落格在 https://fattyyo.com/blog/）
 
 **零建置**：純 HTML + CSS + 原生 JS，沒有框架、沒有 npm。雙擊 `index.html` 或起一個本機伺服器就能看：
 
@@ -57,14 +57,19 @@ python3 -m http.server 8080   # 然後開 http://localhost:8080
 
 ## 部署
 
-GitHub Pages 從 `main` 分支根目錄發佈：
+整站（作品集 + 部落格）是由 **`fattyyo/fattyyo.github.io`** 的 GitHub Actions 一起發佈的：
+這個 repo 的檔案放在網站根目錄，Hugo 部落格建置到 `/blog/`。這個 repo 本身**沒有**開 GitHub Pages。
+
+改完內容後：
 
 ```bash
-git add -A && git commit -m "更新內容" && git push
+git add -A && git commit -m "更新內容"
+./deploy.sh        # = git push + 觸發 fattyyo.github.io 的部署
 ```
 
-換網域時要同步改：`data.js` 的 `siteUrl`、`index.html` 的 `canonical` / `og:url` / `og:image`、`robots.txt`、`sitemap.xml`。
+只 `git push` 不跑 `deploy.sh` 也行，每天 09:00 UTC 會自動重新部署一次，只是要等。
 
+`sitemap.xml` 是全站索引（指向 `sitemap-portfolio.xml` 與 `blog/sitemap.xml`），`robots.txt` 也是全站共用。
 分享預覽圖是 `assets/img/og.png`（1200×630）。
 
 ---
