@@ -198,7 +198,7 @@ const SITE = {
     ],
     off: [
       { k: T('網球', 'Tennis'),
-        v: T('全國大專網球雙打冠軍（UTR 7.0 組）、單打季軍（UTR 4.0 組）', 'National collegiate doubles champion (UTR 7.0) and singles bronze (UTR 4.0)') },
+        v: T('Victorly 盃網球雙打冠軍（UTR 7.0 組）、單打季軍（UTR 4.0 組）', 'Victorly Cup doubles champion (UTR 7.0) and singles bronze (UTR 4.0)') },
       { k: T('旅行', 'Travel'),
         v: T('交換那半年走了歐洲十幾國，攻略都寫在部落格', 'A dozen-plus European countries during the exchange — notes on the blog'),
         url: 'https://fattyyo.com/blog/' },
