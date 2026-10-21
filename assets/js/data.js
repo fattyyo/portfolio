@@ -238,7 +238,5 @@ const UI = {
   close:      T('收合', 'Collapse'),
   resume:     T('下載履歷', 'Résumé'),
   backTop:    T('回到頂端', 'Back to top'),
-  colophon:   T('以 Instrument Serif、Geist 排版。手寫 HTML / CSS / JS，沒有框架。',
-                'Set in Instrument Serif & Geist. Hand-written HTML, CSS and JS — no framework.'),
   boot:       T('量測訊號中', 'Measuring signal'),
 };

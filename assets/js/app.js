@@ -463,7 +463,7 @@
     const phrase = LANG === 'zh' ? ['一起做點東西', 'Let’s build something'] : ['Let’s build something', 'Say hello'];
     const seq = Array.from({ length: 4 }, (_, i) => `<span>${esc(phrase[i % 2])}<i></i></span>`).join('');
     $('#marquee').innerHTML = seq + seq;
-    $('#colophon').textContent = `© ${new Date().getFullYear()} ${SITE.profile.legalName} — ${t(UI.colophon)}`;
+    $('#colophon').textContent = `© ${new Date().getFullYear()} ${SITE.profile.legalName}`;
   }
 
   async function copyMail() {
