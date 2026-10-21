@@ -1,75 +1,144 @@
 <!doctype html>
-<html lang="zh-TW">
+<html lang="en" class="no-js">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Eric Wang — Profile</title>
-<meta name="description" content="Eric Wang (王誠佑) — Software Engineer / Network Systems / Machine Learning. UIUC MCS 2026." />
-<meta name="theme-color" content="#0b1622" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Eric Wang — Software Engineer</title>
+<meta name="description" content="Eric Wang (王誠佑) — software engineer and M.C.S. student at UIUC. Wi-Fi performance testing at Zyxel, systems, and machine learning." />
+<meta name="theme-color" content="#0d0d0c" />
+<meta name="color-scheme" content="dark" />
 <meta name="robots" content="index, follow" />
 <meta name="author" content="Eric Wang" />
 <link rel="canonical" href="https://fattyyo.github.io/portfolio/" />
 
 <!-- Open Graph -->
 <meta property="og:type" content="website" />
-<meta property="og:title" content="Eric Wang — Profile" />
-<meta property="og:description" content="Software Engineer / Network Systems / Machine Learning" />
+<meta property="og:title" content="Eric Wang — Software Engineer" />
+<meta property="og:description" content="Measure first, then make it faster. M.C.S. at UIUC, ex-Zyxel Wi-Fi performance testing." />
 <meta property="og:url" content="https://fattyyo.github.io/portfolio/" />
 <meta property="og:image" content="https://fattyyo.github.io/portfolio/assets/img/og.png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta name="twitter:card" content="summary_large_image" />
 
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230b1622'/%3E%3Cpath d='M3 11h5V5h5' stroke='%232a4459' stroke-width='1.5' fill='none'/%3E%3Crect x='1.5' y='9.5' width='3' height='3' fill='%23b8d4e6'/%3E%3Crect x='11.5' y='3.5' width='3' height='3' fill='%237ee0a8'/%3E%3C/svg%3E" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d0d0c'/%3E%3Cpath d='M6 24c5-1 7-14 13-14s5 6 7 6' stroke='%23d7ff4a' stroke-width='2.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=B612:wght@400;700&family=B612+Mono:wght@400&family=Chiron+Hei+HK:wght@400;500;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@500;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="./assets/css/style.css" />
+<script>document.documentElement.classList.replace('no-js', 'js');</script>
 </head>
 <body>
 
-<!-- 檯面疊層：製圖方格 + 極淡掃描線 + 暈影 -->
-<div class="plate-grid" aria-hidden="true"></div>
-<div class="plate-scan" aria-hidden="true"></div>
-<div class="plate-vignette" aria-hidden="true"></div>
+<a class="skip-link" href="#main" data-ui="skip">Skip to content</a>
 
-<a class="skip-link" href="#main">跳至主要內容</a>
-
-<!-- 開機動畫 -->
-<div id="boot" class="boot" aria-hidden="true">
-  <pre class="boot-log"></pre>
-</div>
-
-<!-- 語言切換 -->
-<button class="lang-toggle" id="langToggle" type="button">EN</button>
-
-<!-- 左右翻頁箭頭（桌機） -->
-<button class="page-nav-arrow page-nav-left" id="navPrev" type="button" hidden>
-  <span class="arrow-icon" aria-hidden="true">◀</span>
-  <span class="arrow-label"></span>
-</button>
-<button class="page-nav-arrow page-nav-right" id="navNext" type="button" hidden>
-  <span class="arrow-label"></span>
-  <span class="arrow-icon" aria-hidden="true">▶</span>
-</button>
-
-<main id="main" class="view" tabindex="-1"></main>
-
-<!-- 底部像素導覽列 -->
-<nav class="dock" id="dock" aria-label="主導覽"></nav>
-
-<!-- 燈箱 -->
-<div class="modal" id="modal" hidden>
-  <div class="modal-backdrop" data-close></div>
-  <div class="modal-frame" role="dialog" aria-modal="true" aria-label="媒體檢視">
-    <button class="modal-close" type="button" data-close aria-label="關閉">✕</button>
-    <div class="modal-body"></div>
+<!-- 開場：訊號強度從 -90 dBm 爬到滿格 -->
+<div class="loader" id="loader" aria-hidden="true">
+  <div class="loader-inner">
+    <span class="loader-label mono" data-ui="boot">Measuring signal</span>
+    <span class="loader-value"><span id="loaderNum">-90</span><small>dBm</small></span>
+    <span class="loader-bar"><i id="loaderBar"></i></span>
   </div>
 </div>
 
+<div class="grain" aria-hidden="true"></div>
+<div class="cursor" id="cursor" aria-hidden="true"><span class="cursor-dot"></span><span class="cursor-ring"><em></em></span></div>
 
-<div class="fx-layer" id="fx" aria-hidden="true"></div>
+<header class="masthead" id="masthead">
+  <a class="brand" href="#top" aria-label="Eric Wang">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 25c5-1 7-15 13-15s5 6 9 6" /></svg>
+    <span>Eric Wang</span>
+  </a>
+  <nav class="menu" id="menu" aria-label="Primary"></nav>
+  <div class="masthead-right">
+    <span class="clock mono" id="clockTop" aria-hidden="true"></span>
+    <button class="lang" id="langToggle" type="button">中</button>
+  </div>
+</header>
+
+<main id="main" tabindex="-1">
+  <section class="hero" id="top" aria-labelledby="heroName">
+    <canvas class="field" id="field" aria-hidden="true"></canvas>
+    <div class="hero-inner">
+      <div class="hero-top"><p class="hero-kicker mono" id="heroKicker"></p><p class="hero-alt mono fade-up" style="--d:.3s" id="heroAlt"></p></div>
+      <h1 class="hero-name" id="heroName"></h1>
+      <div class="hero-foot">
+        <p class="hero-role" id="heroRole"></p>
+        <dl class="hero-meta mono" id="heroMeta"></dl>
+      </div>
+    </div>
+    <a class="scroll-cue mono" href="#statement"><span data-ui="scroll">Scroll</span><i aria-hidden="true"></i></a>
+  </section>
+
+  <section class="statement" id="statement" aria-label="Statement">
+    <p class="statement-text" id="statementText"></p>
+  </section>
+
+  <section class="path" id="path" aria-labelledby="pathTitle">
+    <div class="path-sticky">
+      <header class="section-head reveal">
+        <span class="section-index mono">01</span>
+        <h2 class="section-title" id="pathTitle"></h2>
+        <p class="section-lede" id="pathLede"></p>
+      </header>
+      <div class="path-stage">
+        <svg class="path-chart" id="pathChart" role="img"></svg>
+        <div class="path-side">
+          <div class="path-readout" aria-hidden="true">
+            <span class="mono" id="pathReadLabel"></span>
+            <span class="path-km"><span id="pathKm">0</span><small>km</small></span>
+          </div>
+          <ol class="path-cards" id="pathCards"></ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="work" id="work" aria-labelledby="workTitle">
+    <header class="section-head reveal">
+      <span class="section-index mono">02</span>
+      <h2 class="section-title" id="workTitle"></h2>
+      <span class="section-count mono" id="workCount"></span>
+    </header>
+    <ol class="work-list" id="workList"></ol>
+    <div class="work-preview" id="workPreview" aria-hidden="true"></div>
+  </section>
+
+  <section class="stats" id="stats" aria-label="Numbers">
+    <ul class="stats-list" id="statsList"></ul>
+  </section>
+
+  <section class="about" id="about" aria-labelledby="aboutTitle">
+    <header class="section-head reveal">
+      <span class="section-index mono">03</span>
+      <h2 class="section-title" id="aboutTitle"></h2>
+    </header>
+    <div class="about-grid">
+      <p class="about-body" id="aboutBody"></p>
+      <div class="about-cols">
+        <div><h3 class="about-sub mono" id="stackTitle"></h3><dl class="about-dl" id="stackList"></dl></div>
+        <div><h3 class="about-sub mono" id="offTitle"></h3><dl class="about-dl" id="offList"></dl></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="contact" id="contact" aria-labelledby="contactTitle">
+  <div class="marquee" aria-hidden="true"><div class="marquee-track" id="marquee"></div></div>
+  <div class="contact-inner">
+    <p class="contact-kicker mono" id="contactKicker"></p>
+    <h2 class="contact-title" id="contactTitle"><a id="mailLink" class="mail-link" href="#"></a></h2>
+    <p class="contact-body" id="contactBody"></p>
+    <div class="contact-actions" id="contactActions"></div>
+  </div>
+  <div class="colophon mono">
+    <span id="colophon"></span>
+    <span class="colophon-right"><span id="clockBottom"></span> · <a href="#top" data-ui="backTop">Back to top</a></span>
+  </div>
+</footer>
+
+<div class="toast mono" id="toast" role="status" aria-live="polite"></div>
 
 <script src="./assets/js/data.js"></script>
 <script src="./assets/js/app.js"></script>

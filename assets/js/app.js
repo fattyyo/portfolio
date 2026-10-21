@@ -1,28 +1,31 @@
 /* =====================================================================
-   app.js — 路由、渲染與互動。一般情況不需要改這支，內容請改 data.js
+   app.js — 渲染與互動。一般情況不需要改這支，內容請改 data.js
    ===================================================================== */
 (() => {
   'use strict';
 
   const $  = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-  const el = (tag, cls) => { const n = document.createElement(tag); if (cls) n.className = cls; return n; };
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   /* storage 在無痕模式／封鎖網站資料時會直接 throw，一律包起來 */
   const store = {
-    get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
-    set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} },
+    get(k, s = localStorage) { try { return s.getItem(k); } catch (_) { return null; } },
+    set(k, v, s = localStorage) { try { s.setItem(k, v); } catch (_) {} },
   };
+  const session = (() => { try { return sessionStorage; } catch (_) { return null; } })();
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const isMobile = () => window.matchMedia('(max-width: 900px)').matches;
+  const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
 
   /* ------------------------- 語言 ------------------------- */
-  let LANG = store.get('lang') || SITE.defaultLang || 'zh';
-  if (LANG !== 'zh' && LANG !== 'en') LANG = 'zh';
+  const browserLang = () => (/^zh/i.test(navigator.language || '') ? 'zh' : 'en');
+  let LANG = store.get('lang') || (SITE.defaultLang === 'auto' ? browserLang() : SITE.defaultLang) || 'en';
+  if (LANG !== 'zh' && LANG !== 'en') LANG = 'en';
 
   /* t() 會自動處理 T('中文','English')，也接受單純的字串 */
   const t = (v) => {
@@ -36,755 +39,750 @@
   function setLang(next) {
     LANG = next;
     store.set('lang', next);
-    document.documentElement.lang = next === 'zh' ? 'zh-TW' : 'en';
-    buildChrome();
     render();
   }
 
-  /* ------------------------- SVG 圖示（不用 emoji） ------------------------- */
-  const ICONS = {
-    home:      '<svg viewBox="0 0 24 24"><path d="M12 3 2 12h3v9h6v-6h2v6h6v-9h3z"/></svg>',
-    user:      '<svg viewBox="0 0 24 24"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-5 0-9 2.5-9 5.5V22h18v-2.5c0-3-4-5.5-9-5.5Z"/></svg>',
-    code:      '<svg viewBox="0 0 24 24"><path d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6zm5.2 0L19.2 12l-4.6-4.6L16 6l6 6-6 6z"/></svg>',
-    post:      '<svg viewBox="0 0 24 24"><path d="M5 2h10l4 4v16H5zm9 1.5V7h3.5zM7 10h10v2H7zm0 4h10v2H7zm0 4h7v2H7z"/></svg>',
-    camera:    '<svg viewBox="0 0 24 24"><path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3zm3 5a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11zm0 2.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>',
-    video:     '<svg viewBox="0 0 24 24"><path d="M3 5h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zm16 3.5 4-2.5v12l-4-2.5z"/></svg>',
-    mail:      '<svg viewBox="0 0 24 24"><path d="M2 5h20v14H2zm2 2v.4l8 5 8-5V7z"/></svg>',
-    download:  '<svg viewBox="0 0 24 24"><path d="M11 3h2v8h4l-5 6-5-6h4zM4 19h16v2H4z"/></svg>',
-    github:    '<svg viewBox="0 0 24 24"><path d="M12 1a11 11 0 0 0-3.5 21.4c.6.1.8-.2.8-.6v-2c-3 .7-3.7-1.4-3.7-1.4-.5-1.3-1.2-1.7-1.2-1.7-1-.7 0-.7 0-.7 1.1.1 1.7 1.2 1.7 1.2 1 1.7 2.6 1.2 3.2.9.1-.7.4-1.2.7-1.5-2.5-.3-5-1.2-5-5.5 0-1.2.4-2.2 1.1-3-.1-.3-.5-1.4.1-3 0 0 .9-.3 3 1.1a10.4 10.4 0 0 1 5.5 0c2.1-1.4 3-1.1 3-1.1.6 1.6.2 2.7.1 3 .7.8 1.1 1.8 1.1 3 0 4.3-2.6 5.2-5 5.5.4.3.8 1 .8 2.1v3.1c0 .4.2.7.8.6A11 11 0 0 0 12 1z"/></svg>',
-    linkedin:  '<svg viewBox="0 0 24 24"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9h4v12H3zM9 9h3.8v1.7h.1c.5-1 1.8-2 3.7-2 4 0 4.7 2.5 4.7 5.9V21h-4v-5.6c0-1.4 0-3.1-1.9-3.1s-2.2 1.5-2.2 3V21H9z"/></svg>',
-    instagram: '<svg viewBox="0 0 24 24"><path d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5zm5 5a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm5.5-3a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4z"/></svg>',
-    youtube:   '<svg viewBox="0 0 24 24"><path d="M23 12s0-3.6-.5-5.3a2.8 2.8 0 0 0-2-2C18.8 4.2 12 4.2 12 4.2s-6.8 0-8.5.5a2.8 2.8 0 0 0-2 2C1 8.4 1 12 1 12s0 3.6.5 5.3a2.8 2.8 0 0 0 2 2c1.7.5 8.5.5 8.5.5s6.8 0 8.5-.5a2.8 2.8 0 0 0 2-2C23 15.6 23 12 23 12zM9.8 15.4V8.6l5.9 3.4z"/></svg>',
-    globe:     '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm6.9 9h-3a15 15 0 0 0-1.3-5.4A8 8 0 0 1 18.9 11zM12 4.2c.8 1.2 1.6 3.4 1.8 6.8h-3.6c.2-3.4 1-5.6 1.8-6.8zM5.1 11a8 8 0 0 1 4.3-5.4A15 15 0 0 0 8.1 11zm0 2h3a15 15 0 0 0 1.3 5.4A8 8 0 0 1 5.1 13zm4.9 0h3.6c-.2 3.4-1 5.6-1.8 6.8-.8-1.2-1.6-3.4-1.8-6.8zm4.6 5.4a15 15 0 0 0 1.3-5.4h3a8 8 0 0 1-4.3 5.4z"/></svg>',
-    education: '<svg viewBox="0 0 24 24"><path d="M12 3 1 9l11 6 9-4.9V17h2V9zM5 13.2V17c0 1.7 3.1 3 7 3s7-1.3 7-3v-3.8l-7 3.8z"/></svg>',
-    work:      '<svg viewBox="0 0 24 24"><path d="M9 3h6a2 2 0 0 1 2 2v1h4a1 1 0 0 1 1 1v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a1 1 0 0 1 1-1h4V5a2 2 0 0 1 2-2zm0 3h6V5H9z"/></svg>',
-    award:     '<svg viewBox="0 0 24 24"><path d="M12 2a6 6 0 1 1 0 12A6 6 0 0 1 12 2zm-4 13.3V22l4-2 4 2v-6.7a8 8 0 0 1-8 0z"/></svg>',
-  };
-  const icon = (name) => ICONS[name] || ICONS.globe;
-
-  /* ------------------------- 極簡 Markdown ------------------------- */
-  const CODE_MARK = (i) => `@@CODEBLOCK_${i}@@`;
-
-  function md(src) {
-    const inline = (s) => esc(s)
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-
-    const blocks = [];
-    const text = String(src ?? '').replace(/```[a-z]*\n([\s\S]*?)```/g, (_, code) => {
-      blocks.push(`<pre class="md-code"><code>${esc(code.replace(/\n$/, ''))}</code></pre>`);
-      return CODE_MARK(blocks.length - 1);
-    });
-
-    const out = [];
-    let list = null;
-    const flush = () => { if (list) { out.push(`<ul>${list.join('')}</ul>`); list = null; } };
-
-    text.split('\n').forEach((raw) => {
-      const line = raw.trim();
-      const block = line.match(/^@@CODEBLOCK_(\d+)@@$/);
-      if (block) { flush(); out.push(blocks[+block[1]]); return; }
-      if (!line) { flush(); return; }
-      if (/^###\s+/.test(line)) { flush(); out.push(`<h4>${inline(line.slice(4))}</h4>`); return; }
-      if (/^##\s+/.test(line))  { flush(); out.push(`<h3>${inline(line.slice(3))}</h3>`); return; }
-      if (/^-\s+/.test(line))   { (list ||= []).push(`<li>${inline(line.slice(2))}</li>`); return; }
-      flush();
-      out.push(`<p>${inline(line)}</p>`);
-    });
-    flush();
-    return out.join('');
+  /* ------------------------- 距離（haversine） ------------------------- */
+  function km(a, b) {
+    const R = 6371, rad = Math.PI / 180;
+    const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
   }
+  const fmtKm = (d) => (d < 10 ? '0' : Math.round(d / (d > 1000 ? 10 : 1)) * (d > 1000 ? 10 : 1)).toLocaleString('en-US') + ' km';
 
-  /* ------------------------- 共用區塊 ------------------------- */
-  const pageHeader = (title, subtitle) =>
-    `<header class="page-header">
-       <h1 class="pixel-title">${esc(title)}</h1>
-       ${subtitle ? `<p class="subtitle">${esc(subtitle)}</p>` : ''}
-     </header>`;
-
-  const socialLinks = () => SITE.socials.map((s) => `
-    <a class="social-link" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer"
-       aria-label="${esc(s.label)}">${icon(s.icon)}<span>${esc(s.label)}</span></a>`).join('');
-
-  const resumeLink = () => SITE.resumeUrl
-    ? `<a class="social-link" href="${esc(SITE.resumeUrl)}" download>${icon('download')}<span>${te(UI.downloadResume)}</span></a>`
-    : '';
-
-  const emptyState = () =>
-    `<div class="empty-state"><strong>${te(UI.noData)}</strong>${te(UI.emptyHint)}</div>`;
-
-  const navLabel = (id) => t((SITE.nav.find((n) => n.id === id) || {}).label) || id;
-
-  const fmtDate = (iso) => {
-    if (!iso) return '';
-    const d = new Date(iso);
-    if (isNaN(d)) return iso;
-    return d.toLocaleDateString(LANG === 'zh' ? 'zh-TW' : 'en-US',
-      { year: 'numeric', month: 'short', day: 'numeric' });
-  };
-
-  /* labels：把原始值（例如 kind）對應成顯示文字，沒給就直接顯示原值 */
-  const filterBar = (group, values, labels) => `
-    <div class="filter-bar" data-filter-group="${group}">
-      ${['all', ...values].map((c) => `
-        <button class="pixel-btn${c === 'all' ? ' is-active' : ''}" data-filter="${esc(c)}">
-          ${c === 'all' ? te(UI.all) : te(labels?.[c] ?? c)}
-        </button>`).join('')}
-    </div>`;
-
-  /* ------------------------- 生涯拓撲圖 -------------------------
-     走線一律用直角（Manhattan routing）：這既是像素風的必然，
-     也是真實網路拓撲圖的畫法。節點用真的 <button> 疊在 SVG 上，
-     這樣鍵盤與螢幕閱讀器才能操作，SVG 只負責畫線。
-     ------------------------------------------------------------- */
-  const PAD = 14;  // SVG 邊界留白（單位：viewBox 座標）
-  const CELL = 10; // 每格網格的大小
-
-  /* 視野依實際節點範圍計算，不用 cols/rows 硬框 ——
-     這樣在 data.js 增減節點時，圖面會自己貼合，不會留下一片死空間。 */
-  function topoBounds(nodes) {
-    const xs = nodes.map((n) => n.x), ys = nodes.map((n) => n.y);
-    const minX = Math.min(...xs), maxX = Math.max(...xs);
-    const minY = Math.min(...ys), maxY = Math.max(...ys);
-    return {
-      minX, minY,
-      w: (maxX - minX) * CELL + PAD * 2,
-      h: (maxY - minY) * CELL + PAD * 2,
-    };
-  }
-
-  let BOUNDS = null;
-  const nodePos = (n) => ({
-    x: PAD + (n.x - BOUNDS.minX) * CELL,
-    y: PAD + (n.y - BOUNDS.minY) * CELL,
-  });
-
-  function elbow(a, b) {
-    const p = nodePos(a), q = nodePos(b);
-    if (p.y === q.y || p.x === q.x) return `M${p.x} ${p.y} L${q.x} ${q.y}`;
-    const mid = Math.round((p.x + q.x) / 2);
-    return `M${p.x} ${p.y} H${mid} V${q.y} H${q.x}`;
-  }
-
-  function topologyMap(opts = {}) {
-    const t = SITE.topology;
-    if (!t || !t.nodes.length) return '';
-    const byId = Object.fromEntries(t.nodes.map((n) => [n.id, n]));
-    BOUNDS = topoBounds(t.nodes);
-    const w = BOUNDS.w, h = BOUNDS.h;
-    const cols = Math.round((w - PAD * 2) / CELL);
-    const rows = Math.round((h - PAD * 2) / CELL);
-
-    const wires = t.links.map(([a, b]) => {
-      const na = byId[a], nb = byId[b];
-      if (!na || !nb) return '';
-      const live = na.state === 'active' || nb.state === 'active' ||
-                   na.state === 'next'   || nb.state === 'next';
-      return `<path class="wire${live ? ' is-live' : ''}" d="${elbow(na, nb)}" />`;
-    }).join('');
-
-    const nodes = t.nodes.map((n) => {
-      const p = nodePos(n);
-      return `<button class="topo-node is-${esc(n.state)} kind-${esc(n.kind)}"
-                 type="button" data-node="${esc(n.id)}"
-                 style="left:${(p.x / w) * 100}%; top:${(p.y / h) * 100}%"
-                 aria-label="${te(n.title)}">
-                <span class="topo-dot" aria-hidden="true"></span>
-                <span class="topo-label">${esc(n.label)}</span>
-              </button>`;
-    }).join('');
-
-    const live = t.nodes.filter((n) => n.state === 'active').length;
-
-    return `
-      <section class="topo" aria-labelledby="topoTitle">
-        <div class="topo-bar">
-          <h2 id="topoTitle">${te(UI.mapTitle)}</h2>
-          <span class="topo-readout">
-            node ${t.nodes.length} &middot; link ${t.links.length} &middot;
-            <b>${live} active</b>
-          </span>
-        </div>
-
-        <div class="topo-stage" data-topo style="aspect-ratio:${w} / ${h}">
-          <svg class="topo-wires" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"
-               aria-hidden="true" focusable="false">
-            <g class="grid">
-              ${Array.from({ length: cols + 1 }, (_, i) =>
-                `<path d="M${PAD + i * CELL} 0 V${h}" />`).join('')}
-              ${Array.from({ length: rows + 1 }, (_, i) =>
-                `<path d="M0 ${PAD + i * CELL} H${w}" />`).join('')}
-            </g>
-            ${wires}
-          </svg>
-          ${nodes}
-        </div>
-        <p class="topo-hint">${te(UI.mapHint)}</p>
-
-        ${opts.compact ? '' : `<div class="topo-detail" id="topoDetail" aria-live="polite"></div>`}
-
-        <ol class="trace${opts.compact ? ' is-hidden' : ''}" aria-label="${te(UI.traceTitle)}">
-          ${t.nodes.map((n, i) => `
-            <li class="trace-hop is-${esc(n.state)}">
-              <span class="hop-n">${String(i + 1).padStart(2, '0')}</span>
-              <span class="hop-label">${esc(n.label)}</span>
-              <span class="hop-period">${esc(n.period || '')}</span>
-              <span class="hop-title">${te(n.title)}</span>
-              <span class="hop-detail">${te(n.detail)}</span>
-              ${n.href ? `<a class="hop-link" href="${esc(n.href)}">${te(UI.goTo)} &rarr;</a>` : ''}
-            </li>`).join('')}
-        </ol>
-      </section>`;
-  }
-
-  function showNode(id) {
-    const n = (SITE.topology.nodes || []).find((x) => x.id === id);
-    if (!n) return;
-
-    $$('[data-node]', main).forEach((b) =>
-      b.classList.toggle('is-selected', b.dataset.node === id));
-
-    // Me 頁沒有詳情卡，改成高亮並捲到對應的完整記錄
-    const box = $('#topoDetail', main);
-    if (!box) {
-      const rec = $$('.record', main)[(SITE.topology.nodes || []).findIndex((x) => x.id === id)];
-      if (rec) {
-        $$('.record', main).forEach((r) => r.classList.toggle('is-focus', r === rec));
-        rec.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
-      }
-      return;
-    }
-
-    box.innerHTML = `
-      <div class="pixel-card topo-card">
-        <div class="topo-card-meta">
-          <span class="tag-kind">${te(UI.nodeKind[n.kind] || n.kind)}</span>
-          <span class="tag-state is-${esc(n.state)}">${te(UI.nodeState[n.state] || n.state)}</span>
-          <span class="topo-period">${esc(n.period || '')}</span>
-        </div>
-        <h3>${te(n.title)}</h3>
-        <p>${te(n.detail)}</p>
-        ${n.href ? `<a class="pixel-btn" href="${esc(n.href)}">${te(UI.goTo)} &rarr;</a>` : ''}
-      </div>`;
-  }
-
-  /* ------------------------- 各頁渲染 ------------------------- */
-  const PAGES = {
-
-    home() {
-      const p = SITE.profile;
-      const status = (p.status || []).map((s) =>
-        `<div class="status-chip"><b>${esc(s.label)}</b>${te(s.value)}</div>`).join('');
-
-      return `
-        <section class="panel">
-          <div class="panel-frame">
-            <span class="reg reg-tl" aria-hidden="true"></span><span class="reg reg-tr" aria-hidden="true"></span>
-            <span class="reg reg-bl" aria-hidden="true"></span><span class="reg reg-br" aria-hidden="true"></span>
-
-            <div class="panel-strip">
-              <span class="strip-label">${esc(p.name)}</span>
-              <span class="strip-code">${te(p.jobTitle)}</span>
-              <span class="strip-led"><i aria-hidden="true"></i>ONLINE</span>
-            </div>
-
-            <div class="panel-body">
-              <div class="panel-screen">
-                <img src="${esc(p.avatar)}" alt="${esc(p.name)}" width="150" height="150" />
-              </div>
-              <div class="panel-info">
-                <h1>${esc(p.name)}${p.nameZh ? `<span class="name-zh">${esc(p.nameZh)}</span>` : ''}</h1>
-                <p class="tagline">${te(p.tagline)}</p>
-                <div class="profile-description"><p>${te(p.description)}</p></div>
-                <div class="social-links">${socialLinks()}${resumeLink()}</div>
-              </div>
-            </div>
-          </div>
-        </section>
-        <section class="status-strip">${status}</section>
-        ${topologyMap()}
-        <p class="start-prompt">${te(isMobile() ? UI.startPromptMobile : UI.startPromptDesktop)}</p>`;
-    },
-
-    me() {
-      const blocks = SITE.overview.map((b) => `
-        <article class="pixel-card overview-block">
-          <h3>${te(b.title)}</h3>
-          <ul>${b.items.map((i) => `<li>${te(i)}</li>`).join('')}</ul>
-        </article>`).join('');
-
-      const nodes = SITE.topology?.nodes || [];
-      const kinds = [...new Set(nodes.map((n) => n.kind))];
-
-      // 完整記錄：拓撲圖的每個節點都攤開，不必點也看得到全部
-      const records = nodes.map((n, i) => `
-        <article class="record is-${esc(n.state)}" data-cat="${esc(n.kind)}">
-          <div class="record-rail" aria-hidden="true"><span></span></div>
-          <div class="record-body">
-            <div class="record-head">
-              <span class="record-n">${String(i + 1).padStart(2, '0')}</span>
-              <span class="record-label">${esc(n.label)}</span>
-              <span class="record-period">${esc(n.period || '')}</span>
-              <span class="tag-state is-${esc(n.state)}">${te(UI.nodeState[n.state] || n.state)}</span>
-            </div>
-            <h3>${te(n.title)}</h3>
-            <p>${te(n.detail)}</p>
-            ${n.href ? `<a class="pixel-btn" href="${esc(n.href)}">${te(UI.goTo)} &rarr;</a>` : ''}
-          </div>
-        </article>`).join('');
-
-      return `${pageHeader(navLabel('me'), t(UI.subtitle.me))}
-        <section class="overview stagger">${blocks}</section>
-        ${filterBar('records', kinds, UI.nodeKind)}
-        ${topologyMap({ compact: true })}
-        <section class="records">${records}</section>`;
-    },
-
-    coding() {
-      const head = pageHeader(navLabel('coding'), t(UI.subtitle.coding));
-      if (!SITE.projects.length) return head + emptyState();
-
-      const cards = SITE.projects.map((p) => `
-        <article class="pixel-card project-card" data-tech="${esc((p.tech || []).join('|'))}">
-          <h3>${te(p.title)}</h3>
-          <p>${te(p.description)}</p>
-          <div class="project-tech">
-            ${(p.tech || []).map((x) => `<button class="tech-tag" data-tech-pick="${esc(x)}" type="button">${esc(x)}</button>`).join('')}
-          </div>
-          <div class="project-links">
-            ${(p.links || []).map((l) => `<a class="pixel-btn" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${esc(l.label)}</a>`).join('')}
-          </div>
-        </article>`).join('');
-
-      return `${head}
-        ${filterBar('projects', [...new Set(SITE.projects.flatMap((p) => p.tech || []))])}
-        <section class="projects-grid stagger">${cards}</section>`;
-    },
-
-    blog() {
-      const head = pageHeader(navLabel('blog'), t(UI.subtitle.blog));
-      const posts = (SITE.posts || []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
-      if (!posts.length) return head + emptyState();
-
-      const cards = posts.map((p) => {
-        const external = !!p.externalUrl;
-        const href = external ? p.externalUrl : `#/blog/${encodeURIComponent(p.slug)}`;
-        return `
-        <a class="pixel-card post-card" href="${esc(href)}"
-           ${external ? 'target="_blank" rel="noopener noreferrer"' : ''}>
-          <div class="post-meta">
-            <time datetime="${esc(p.date)}">${esc(fmtDate(p.date))}</time>
-            ${(p.tags || []).map((x) => `<span class="tech-tag">${esc(x)}</span>`).join('')}
-          </div>
-          <h3>${te(p.title)}</h3>
-          <p>${te(p.excerpt)}</p>
-          <span class="post-more">${external ? te(UI.openLink) : te(UI.readMore)} &rarr;</span>
-        </a>`;
-      }).join('');
-
-      return `${head}<section class="posts-list stagger">${cards}</section>`;
-    },
-
-    post(slug) {
-      const p = (SITE.posts || []).find((x) => x.slug === slug);
-      if (!p) {
-        return `${pageHeader(navLabel('blog'), t(UI.postNotFound))}
-          <div class="post-view"><a class="pixel-btn back-link" href="#/blog">${te(UI.backToList)}</a></div>`;
-      }
-      return `
-        <article class="post-view">
-          <a class="pixel-btn back-link" href="#/blog">${te(UI.backToList)}</a>
-          <header class="post-head">
-            <div class="post-meta">
-              <time datetime="${esc(p.date)}">${esc(fmtDate(p.date))}</time>
-              ${(p.tags || []).map((x) => `<span class="tech-tag">${esc(x)}</span>`).join('')}
-            </div>
-            <h1 class="pixel-title post-title">${te(p.title)}</h1>
-          </header>
-          <div class="post-body">${md(t(p.body))}</div>
-        </article>`;
-    },
-
-    photos() {
-      const head = pageHeader(navLabel('photos'), t(UI.subtitle.photos));
-      if (!SITE.photos.length) return head + emptyState();
-
-      const cards = SITE.photos.map((p, i) => `
-        <button class="pixel-card photo-card" data-cat="${esc(p.category)}" data-photo="${i}" type="button">
-          <div class="photo-thumb"><img src="${esc(p.src)}" alt="${te(p.title)}" loading="lazy" width="640" height="480" /></div>
-          <div class="photo-meta">
-            <h3>${te(p.title)}</h3>
-            <div class="meta-row"><span>${esc(p.location || '')}</span><span>${esc(p.date || '')}</span></div>
-          </div>
-        </button>`).join('');
-
-      return `${head}
-        ${filterBar('photos', [...new Set(SITE.photos.map((p) => p.category).filter(Boolean))])}
-        <section class="photos-grid stagger">${cards}</section>`;
-    },
-
-    videos() {
-      const head = pageHeader(navLabel('videos'), t(UI.subtitle.videos));
-      if (!SITE.videos.length) return head + emptyState();
-      const cards = SITE.videos.map((v, i) => `
-        <button class="pixel-card video-card" data-video="${i}" type="button">
-          <div class="video-thumb"><img src="${esc(v.thumb || (v.youtubeId ? `https://img.youtube.com/vi/${v.youtubeId}/hqdefault.jpg` : ''))}" alt="${te(v.title)}" loading="lazy" width="640" height="360" /></div>
-          <div class="video-meta"><h3>${te(v.title)}</h3><p>${te(v.description)}</p></div>
-        </button>`).join('');
-      return `${head}<section class="videos-grid stagger">${cards}</section>`;
-    },
-
-    contact() {
-      return `${pageHeader(navLabel('contact'), t(UI.subtitle.contact))}
-        <section class="pixel-card contact-card">
-          <p>${te(SITE.contact.body)}</p>
-          <div class="contact-list social-links">${socialLinks()}${resumeLink()}</div>
-        </section>`;
-    },
-  };
-
-  /* ------------------------- 路由 ------------------------- */
-  const navIds = SITE.nav.map((n) => n.id);
-  const main = $('#main');
-
-  function route() {
-    const raw = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
-    const [id, param] = raw.split('/');
-    return { id: navIds.includes(id) ? id : navIds[0], param: param || '' };
-  }
-
-  function go(id) { location.hash = `#/${id}`; }
-
-  /* ------------------------- 每頁 meta（SEO / 分享預覽） ------------------------- */
-  function updateMeta({ id, param }) {
-    const p = SITE.profile;
-    let title = `${p.name} — ${navLabel(id)}`;
-    let desc = t(p.tagline);
-
-    if (id === 'blog' && param) {
-      const post = (SITE.posts || []).find((x) => x.slug === param);
-      if (post) { title = `${t(post.title)} — ${p.name}`; desc = t(post.excerpt); }
-    } else if (id === 'home') {
-      title = `${p.name}${p.nameZh ? ` · ${p.nameZh}` : ''} — ${t(p.jobTitle)}`;
-      desc = t(p.description).slice(0, 160);
-    }
-
-    document.title = title;
-    const base = String(SITE.siteUrl).replace(/\/+$/, '') + '/';
-    // og:url 帶片段，分享出去才會直接開到那一頁；
-    // canonical 一律用不帶片段的網址 —— 所有路由本來就是同一份文件，
-    // 而且搜尋引擎會忽略帶片段的 canonical。
-    const shareUrl = base + (location.hash || '#/home');
-    const set = (sel, attr, val) => { const n = $(sel); if (n) n.setAttribute(attr, val); };
-    set('meta[name="description"]', 'content', desc);
-    set('meta[property="og:title"]', 'content', title);
-    set('meta[property="og:description"]', 'content', desc);
-    set('meta[property="og:url"]', 'content', shareUrl);
-    set('link[rel="canonical"]', 'href', base);
-  }
-
-  /* ------------------------- 渲染 ------------------------- */
+  /* =====================================================================
+     渲染
+     ===================================================================== */
   function render() {
-    const r = route();
-    const renderer = (r.id === 'blog' && r.param) ? () => PAGES.post(r.param) : PAGES[r.id];
-    main.className = `view ${r.id}`;
-    main.innerHTML = renderer ? renderer() : emptyState();
+    const P = SITE.profile;
+    document.documentElement.lang = LANG === 'zh' ? 'zh-TW' : 'en';
+    document.title = `${P.name}${LANG === 'zh' ? `（${P.nameZh}）` : ''} — ${t(P.jobTitle)}`;
 
-    if (!reduceMotion) {
-      $$('.stagger > *', main).forEach((n, i) => {
-        n.style.animationDelay = `${Math.min(i * 45, 400)}ms`;
-      });
-    }
+    $$('[data-ui]').forEach((n) => { n.textContent = t(UI[n.dataset.ui]); });
+    const toggle = $('#langToggle');
+    toggle.textContent = t(UI.langLabel);
+    toggle.setAttribute('aria-label', t(UI.langAria));
 
-    // 首頁一載入就先選中現在進行中的節點，畫面不會是空的
-    if (r.id === 'home' && SITE.topology) {
-      const first = (SITE.topology.nodes || []).find((n) => n.state === 'active')
-                 || (SITE.topology.nodes || [])[0];
-      if (first) showNode(first.id);
-    }
+    $('#menu').innerHTML = ['work', 'path', 'about', 'contact']
+      .map((id) => `<a href="#${id}" data-sec="${id}">${te(UI.nav[id])}</a>`).join('');
 
-    syncNav(r.id);
-    updateMeta(r);
-    window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
-    main.focus({ preventScroll: true });
+    renderHero();
+    renderStatement();
+    renderPath();
+    renderWork();
+    renderStats();
+    renderAbout();
+    renderContact();
+    observeReveals();
+    tickClock();
+    onScroll();
   }
 
-  /* ------------------------- 導覽列與語言鈕 ------------------------- */
-  const dock = $('#dock');
-  const prevBtn = $('#navPrev'), nextBtn = $('#navNext'), langBtn = $('#langToggle');
+  /* ---------- Hero ---------- */
+  function renderHero() {
+    const P = SITE.profile;
+    $('#heroKicker').innerHTML = `${te(P.open)}`;
+    $('#heroKicker').classList.add('fade-up');
+    $('#heroKicker').style.setProperty('--d', '.2s');
 
-  function buildChrome() {
-    dock.innerHTML = SITE.nav.map((n) => `
-      <a class="dock-item" href="#/${n.id}" data-nav="${n.id}">
-        ${icon(n.icon)}<span>${te(n.label)}</span>
-      </a>`).join('');
-    langBtn.textContent = t(UI.langLabel);
-    langBtn.setAttribute('aria-label', t(UI.langAria));
+    let i = 0;
+    const word = (w, italic) => `<span class="word">${[...w].map((c) =>
+      `<span class="char" style="--i:${i++}">${italic ? `<em>${esc(c)}</em>` : esc(c)}</span>`).join('')}</span>`;
+    const [first, ...rest] = P.name.split(' ');
+    $('#heroName').innerHTML =
+      `<span class="sr-only">${esc(P.name)}</span>` +
+      `<span aria-hidden="true" style="display:contents">${word(first)}${word(rest.join(' '), true)}</span>`;
+    $('#heroAlt').innerHTML = `<span lang="zh-TW">${esc(P.nameZh)}</span><span>${esc(P.legalName)}</span>`;
+
+    $('#heroRole').innerHTML = te(P.role);
+    $('#heroRole').className = 'hero-role fade-up';
+    $('#heroRole').style.setProperty('--d', '.75s');
+
+    $('#heroMeta').innerHTML = `
+      <div class="fade-up" style="--d:.85s"><dt>${LANG === 'zh' ? '現在' : 'Now'}</dt><dd>${te(P.now)}</dd></div>
+      <div class="fade-up" style="--d:.95s"><dt>${LANG === 'zh' ? '所在地' : 'Based in'}</dt><dd>${esc(P.city)}</dd></div>
+      <div class="fade-up live" style="--d:1.05s"><dt>${te(UI.localTime)}</dt><dd data-clock="long"></dd></div>`;
   }
 
-  function syncNav(id) {
-    $$('[data-nav]', dock).forEach((a) => {
-      if (a.dataset.nav === id) a.setAttribute('aria-current', 'page');
-      else a.removeAttribute('aria-current');
+  /* ---------- Statement：逐字被捲動「點亮」 ---------- */
+  function renderStatement() {
+    const raw = t(SITE.statement);
+    /* 中文逐字切，英文以空白切；*...* 包起來的是強調 */
+    const parts = raw.split(/(\*[^*]+\*)/g).filter(Boolean);
+    const tokens = [];
+    parts.forEach((p) => {
+      const em = p.startsWith('*');
+      const s = em ? p.slice(1, -1) : p;
+      const units = LANG === 'zh'
+        ? s.match(/[A-Za-z0-9.%+-\-/]+|\s+|./gu) || []
+        : s.split(/(\s+)/);
+      units.forEach((u) => tokens.push({ u, em }));
+    });
+    $('#statementText').innerHTML = tokens.map(({ u, em }) =>
+      /^\s+$/.test(u) ? ' ' : `<span class="w${em ? ' em' : ''}">${esc(u)}</span>`).join('');
+  }
+
+  /* ---------- Path：Rate vs. Range ---------- */
+  let pathGeo = null;
+  function renderPath() {
+    const { stops } = SITE.path;
+    $('#pathTitle').textContent = t(SITE.path.title);
+    $('#pathLede').textContent = t(SITE.path.lede);
+    $('#pathReadLabel').textContent = t(UI.pathRead);
+    stops.forEach((s) => { s.km = km(stops[0], s); });
+
+    $('#pathCards').innerHTML = stops.map((s, i) => `
+      <li class="path-card" data-i="${i}">
+        <div class="pc-top mono"><span>${esc(s.place)} · <span class="pc-km">${fmtKm(s.km)}</span></span><span>${te(s.period)}</span></div>
+        ${s.current ? `<span class="pc-now mono">${te(UI.pathNow)}</span>` : ''}
+        <h3>${te(s.title)}</h3>
+        <p>${te(s.detail)}</p>
+        <div class="path-progress" aria-hidden="true">${stops.map((_, j) => `<i class="${j <= i ? 'on' : ''}"></i>`).join('')}</div>
+      </li>`).join('');
+    drawPathChart();
+  }
+
+  function drawPathChart() {
+    const svg = $('#pathChart');
+    const { stops } = SITE.path;
+    const r = svg.getBoundingClientRect();
+    const W = Math.max(280, r.width), H = Math.max(200, r.height);
+    const narrow = W < 520;
+    const pad = { l: narrow ? 8 : 52, r: narrow ? 20 : 24, t: narrow ? 28 : 20, b: narrow ? 26 : 44 };
+    const maxLog = Math.log10(20000);
+    const toYear = (y) => +y;
+    const y0 = 2020, y1 = 2027;
+    const X = (d) => pad.l + (Math.log10(Math.max(1, d)) / maxLog) * (W - pad.l - pad.r);
+    const Y = (yr) => pad.t + ((yr - y0) / (y1 - y0)) * (H - pad.t - pad.b);
+    /* 用起始年月決定 y，讓同一年的點不會疊在一起 */
+    const startYear = (s) => {
+      const m = String(t(s.period)).match(/(\d{4})[.\s]*(\d{2})?/) || [];
+      const mm = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+      const en = String(s.period.en || '').match(/^(\w{3})\s+(\d{4})/);
+      if (en) return +en[2] + (mm[en[1]] || 0) / 12;
+      return toYear(m[1] || s.year) + ((+m[2] || 1) - 1) / 12;
+    };
+    const pts = stops.map((s) => ({ x: X(s.km), y: Y(startYear(s)), s }));
+
+    let g = '<g class="grid">';
+    for (let e = 0; e <= 4; e++) {
+      const x = X(10 ** e);
+      g += `<line class="${e % 2 ? '' : 'major'}" x1="${x}" x2="${x}" y1="${pad.t}" y2="${H - pad.b}"/>`;
+      if (!narrow || e % 2 === 0) g += `<text x="${x}" y="${H - pad.b + 20}" text-anchor="${e === 0 ? 'start' : narrow && e === 4 ? 'end' : 'middle'}">${e === 0 ? '0' : (10 ** e).toLocaleString('en-US')}</text>`;
+    }
+    for (let yr = y0; yr <= y1; yr++) {
+      const y = Y(yr);
+      g += `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y}" y2="${y}"/>`;
+      if (!narrow) g += `<text x="${pad.l - 12}" y="${y + 4}" text-anchor="end">${yr}</text>`;
+    }
+    g += '</g>';
+    if (!narrow) g += `<text class="axis-label" x="${W - pad.r}" y="${H - 4}" text-anchor="end">${te(UI.pathAxisX)}</text>`;
+
+    const d = pts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+    let stopsSvg = '';
+    pts.forEach((p, i) => {
+      /* 標籤放在沒有線段經過的那一側 */
+      const nb = [pts[i - 1], pts[i + 1]].filter(Boolean);
+      const hasAbove = nb.some((q) => q.y < p.y - 1), hasBelow = nb.some((q) => q.y > p.y + 1);
+      const roomRight = W - pad.r - p.x > 60;
+      let tx = 0, ty = -16, anchor = 'middle';
+      if (!hasAbove) ty = -16;
+      else if (!hasBelow) ty = 26;
+      else if (nb.every((q) => q.x > p.x)) { tx = -14; ty = 4; anchor = 'end'; }
+      else { tx = roomRight ? 12 : -12; ty = -12; anchor = roomRight ? 'start' : 'end'; }
+      if (anchor === 'middle' && p.x < pad.l + 30) { anchor = 'start'; tx = -6; }
+      if (anchor === 'middle' && p.x > W - pad.r - 40) { anchor = 'end'; tx = 6; }
+      if (narrow && i === pts.length - 1) { anchor = 'end'; tx = -12; ty = -12; }
+      stopsSvg += `<g class="stop" data-i="${i}" transform="translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})">
+        <circle class="halo" r="6"/><circle class="dot" r="5.5"/>
+        <text x="${tx}" y="${ty}" text-anchor="${anchor}">${esc(p.s.place.toUpperCase())}</text></g>`;
     });
 
-    const i = navIds.indexOf(id);
-    const prev = i > 0 ? SITE.nav[i - 1] : null;
-    const next = i < SITE.nav.length - 1 ? SITE.nav[i + 1] : null;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('aria-label', stops.map((s) => `${s.place} ${fmtKm(s.km)}, ${t(s.period)}`).join('; '));
+    svg.innerHTML = `${g}<path class="trace-bg" d="${d}"/><path class="trace" id="trace" d="${d}"/>${stopsSvg}`;
 
-    prevBtn.hidden = !prev;
-    nextBtn.hidden = !next;
-    if (prev) { $('.arrow-label', prevBtn).textContent = t(prev.label); prevBtn.onclick = () => go(prev.id); }
-    if (next) { $('.arrow-label', nextBtn).textContent = t(next.label); nextBtn.onclick = () => go(next.id); }
+    /* 每一段的累積長度，用來決定「畫到哪裡就點亮哪一站」 */
+    const tr = $('#trace');
+    const total = tr.getTotalLength();
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+    tr.style.strokeDasharray = total;
+    pathGeo = { total, cum: cum.map((c) => c / cum[cum.length - 1]), tr, active: -1, kms: stops.map((s) => s.km) };
+    updatePath();
   }
 
-  langBtn.addEventListener('click', () => setLang(LANG === 'zh' ? 'en' : 'zh'));
+  function updatePath() {
+    if (!pathGeo) return;
+    const sec = $('#path');
+    const r = sec.getBoundingClientRect();
+    const span = r.height - window.innerHeight;
+    const p = clamp(-r.top / span, 0, 1);
+    const drawn = clamp((p - 0.04) / 0.82, 0, 1);
+    pathGeo.tr.style.strokeDashoffset = pathGeo.total * (1 - drawn);
+    const { cum, kms } = pathGeo;
+    /* 線頭所在的那一段 j，以及離線頭最近的那一站 active（卡片跟著它換） */
+    let j = 0;
+    cum.forEach((c, i) => { if (i < cum.length - 1 && drawn >= c) j = i; });
+    const active = drawn - cum[j] < (cum[j + 1] - cum[j]) / 2 ? j : j + 1;
 
-  /* ------------------------- 篩選 ------------------------- */
-  function applyFilter(group, val) {
-    const bar = $(`.filter-bar[data-filter-group="${group}"]`, main);
-    if (!bar) return;
-    $$('[data-filter]', bar).forEach((b) => b.classList.toggle('is-active', b.dataset.filter === val));
-
-    if (group === 'projects') {
-      $$('.project-card', main).forEach((n) => {
-        n.hidden = !(val === 'all' || (n.dataset.tech || '').split('|').includes(val));
-      });
-    } else if (group === 'records') {
-      const nodes = SITE.topology?.nodes || [];
-      $$('.record', main).forEach((n) => {
-        n.hidden = !(val === 'all' || n.dataset.cat === val);
-      });
-      // 圖上不符合的節點淡出，但保留連線以免拓撲斷掉
-      $$('[data-node]', main).forEach((b) => {
-        const nd = nodes.find((x) => x.id === b.dataset.node);
-        b.classList.toggle('is-dim', !(val === 'all' || (nd && nd.kind === val)));
-      });
-    } else {
-      $$('.photo-card', main).forEach((n) => { n.hidden = !(val === 'all' || n.dataset.cat === val); });
-    }
-  }
-
-  /* ------------------------- main 的點擊事件 ------------------------- */
-  main.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-filter]');
-    if (btn) return applyFilter(btn.closest('.filter-bar').dataset.filterGroup, btn.dataset.filter);
-
-    // 點專案卡上的技術標籤 = 直接套用該篩選
-    const pick = e.target.closest('[data-tech-pick]');
-    if (pick) {
-      applyFilter('projects', pick.dataset.techPick);
-      const bar = $('.filter-bar', main);
-      if (bar) bar.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
-      return;
-    }
-
-    const node = e.target.closest('[data-node]');
-    if (node) return showNode(node.dataset.node);
-
-    const photo = e.target.closest('[data-photo]');
-    if (photo) {
-      const p = SITE.photos[+photo.dataset.photo];
-      return openModal(`
-        <img src="${esc(p.src)}" alt="${te(p.title)}" width="640" height="480" />
-        <h3>${te(p.title)}</h3>
-        <div class="meta-row">
-          <span>${esc(p.location || '')}</span><span>${esc(p.date || '')}</span><span>${esc(p.category || '')}</span>
-        </div>`);
-    }
-
-    const video = e.target.closest('[data-video]');
-    if (video) {
-      const v = SITE.videos[+video.dataset.video];
-      const media = v.youtubeId
-        ? `<iframe src="https://www.youtube.com/embed/${esc(v.youtubeId)}" title="${te(v.title)}"
-             allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"
-             allowfullscreen loading="lazy"></iframe>`
-        : `<img src="${esc(v.thumb)}" alt="${te(v.title)}" width="640" height="360" />`;
-      return openModal(`${media}
-        <h3>${te(v.title)}</h3>
-        <p>${te(v.description)}</p>
-        ${v.url && v.url !== '#' ? `<a class="pixel-btn" href="${esc(v.url)}" target="_blank" rel="noopener noreferrer">${te(UI.openLink)}</a>` : ''}`);
-    }
-  });
-
-  /* ------------------------- 燈箱（含焦點鎖定） ------------------------- */
-  const modal = $('#modal'), modalBody = $('.modal-body', modal), modalFrame = $('.modal-frame', modal);
-  let lastFocused = null;
-  const FOCUSABLE = 'a[href], button:not([disabled]), input, select, textarea, iframe, [tabindex]:not([tabindex="-1"])';
-
-  function openModal(html) {
-    lastFocused = document.activeElement;
-    modalBody.innerHTML = html;
-    modal.hidden = false;
-    document.body.style.overflow = 'hidden';
-    $('.modal-close', modal).focus();
-  }
-  function closeModal() {
-    if (modal.hidden) return;
-    modal.hidden = true;
-    modalBody.innerHTML = '';
-    document.body.style.overflow = '';
-    if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
-  }
-  modal.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) closeModal(); });
-
-  /* Tab 不會跑到燈箱後面的頁面 */
-  modal.addEventListener('keydown', (e) => {
-    if (e.key !== 'Tab') return;
-    const items = $$(FOCUSABLE, modalFrame).filter((n) => n.offsetParent !== null);
-    if (!items.length) return;
-    const first = items[0], last = items[items.length - 1];
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-  });
-
-  /* ------------------------- 快捷鍵 ------------------------- */
-  const SHORTCUTS = [
-    ['←  →', T('上一頁 / 下一頁', 'Previous / next page')],
-    ['L',   T('切換中英文', 'Switch language')],
-    ['Esc', T('關閉視窗', 'Close dialog')],
-    ['?',   T('顯示這份說明', 'Show this help')],
-  ];
-
-  function showShortcuts() {
-    openModal(`<h3>${te(UI.shortcuts)}</h3>
-      <dl class="shortcut-list">
-        ${SHORTCUTS.map(([k, d]) => `<div><dt><kbd>${esc(k)}</kbd></dt><dd>${te(d)}</dd></div>`).join('')}
-      </dl>`);
-  }
-
-  document.addEventListener('keydown', (e) => {
-    if (e.target.closest('input, textarea')) return;
-
-    if (e.key === 'Escape') return closeModal();
-    if (e.key === '?') { e.preventDefault(); return modal.hidden ? showShortcuts() : closeModal(); }
-    if (!modal.hidden) return;
-
-    if (e.key === 'l' || e.key === 'L') return setLang(LANG === 'zh' ? 'en' : 'zh');
-
-    const i = navIds.indexOf(route().id);
-    if (e.key === 'ArrowLeft' && i > 0) go(navIds[i - 1]);
-    if (e.key === 'ArrowRight' && i < navIds.length - 1) go(navIds[i + 1]);
-  });
-
-  /* ------------------------- 彩蛋：Konami code ------------------------- */
-  (() => {
-    const CODE = ['arrowup', 'arrowup', 'arrowdown', 'arrowdown',
-                  'arrowleft', 'arrowright', 'arrowleft', 'arrowright', 'b', 'a'];
-    let pos = 0;
-    document.addEventListener('keydown', (e) => {
-      const key = e.key.toLowerCase();
-      pos = (key === CODE[pos]) ? pos + 1 : (key === CODE[0] ? 1 : 0);
-      if (pos < CODE.length) return;
-      pos = 0;
-      document.body.classList.toggle('konami');
-      const on = document.body.classList.contains('konami');
-      const toast = el('div', 'toast');
-      toast.textContent = on ? 'CHEAT MODE ON' : 'CHEAT MODE OFF';
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 2200);
+    /* 大數字：沿著目前這段線，在對數尺度上內插距離 */
+    const u = clamp((drawn - cum[j]) / (cum[j + 1] - cum[j] || 1), 0, 1);
+    const L = (d) => Math.log10(Math.max(1, d));
+    const dNow = 10 ** lerp(L(kms[j]), L(kms[j + 1]), u);
+    $('#pathKm').textContent = (dNow < 10 ? 0 : Math.round(dNow / 10) * 10).toLocaleString('en-US');
+    $$('#pathChart .stop').forEach((g, i) => {
+      g.classList.toggle('reached', drawn >= cum[i] - 0.001);
+      g.classList.toggle('active', i === active && drawn >= cum[i] - 0.001);
     });
-  })();
+    if (active === pathGeo.active) return;
+    pathGeo.active = active;
+    $$('#pathCards .path-card').forEach((c, i) => {
+      c.classList.toggle('active', i === active);
+      c.classList.toggle('past', i < active);
+      c.setAttribute('aria-hidden', i === active ? 'false' : 'true');
+    });
+  }
 
-  /* ------------------------- 點擊特效：封包爆發 -------------------------
-     刻意不做放射狀粒子。封包沿直角路徑跑，跟拓撲圖的走線規則一致；
-     外圈是方形的 ping 環，不是圓的。 */
-  (() => {
-    if (reduceMotion) return;
-    const fx = $('#fx');
-    if (!fx) return;
+  /* ---------- Work ---------- */
+  function renderWork() {
+    $('#workTitle').textContent = t(UI.workTitle);
+    $('#workCount').textContent = `(${String(SITE.work.length).padStart(2, '0')})`;
+    $('#workList').innerHTML = SITE.work.map((w, i) => {
+      const n = String(i + 1).padStart(2, '0');
+      return `
+      <li class="work-item reveal" style="--d:${i * 0.06}s" data-art="${esc(w.art)}">
+        <button class="work-row" type="button" aria-expanded="false" aria-controls="wd-${esc(w.id)}" data-cursor="open">
+          <span class="work-idx mono">${n}</span>
+          <span class="work-title">${te(w.title)}</span>
+          <span class="work-kind">${te(w.kind)}</span>
+          <span class="work-year mono">${esc(w.year)}</span>
+          <span class="work-plus" aria-hidden="true"></span>
+        </button>
+        <div class="work-detail" id="wd-${esc(w.id)}" role="region" aria-label="${te(w.title)}">
+          <div><div class="work-detail-inner">
+            <figure class="work-art-inline" aria-hidden="true">${ART[w.art] ? ART[w.art]() : ''}</figure>
+            <div class="work-copy">
+              <p class="work-summary">${te(w.summary)}</p>
+              ${w.points.length ? `<ul class="work-points">${w.points.map((p) => `<li>${te(p)}</li>`).join('')}</ul>` : ''}
+              <div class="work-tags mono">${w.tags.map((x) => `<span>${te(x)}</span>`).join('')}</div>
+              ${w.links.length ? `<div class="work-links">${w.links.map((l) =>
+                `<a class="btn" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${te(l.label)} <span class="arr" aria-hidden="true">↗</span></a>`).join('')}</div>` : ''}
+            </div>
+          </div></div>
+        </div>
+      </li>`;
+    }).join('');
 
-    let last = 0;
-    document.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0) return;
-      const now = performance.now();
-      if (now - last < 90) return;            // 連點時不要堆爆
-      last = now;
+    $('#workPreview').innerHTML = SITE.work.map((w) => (ART[w.art] ? ART[w.art]().replace('<svg', `<svg data-art="${esc(w.art)}"`) : '')).join('');
 
-      const burst = el('div', 'burst');
-      burst.style.left = `${e.clientX}px`;
-      burst.style.top  = `${e.clientY}px`;
-
-      burst.appendChild(el('span', 'ping'));
-
-      // 四個沿軸線直走，四個走 L 形轉一次直角
-      const AXES = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-      AXES.forEach(([ax, ay], i) => {
-        const p = el('i', 'pkt');
-        const d = 34 + Math.random() * 30;
-        p.style.setProperty('--dx', `${ax * d}px`);
-        p.style.setProperty('--dy', `${ay * d}px`);
-        p.style.animationDelay = `${i * 18}ms`;
-        burst.appendChild(p);
+    $$('#workList .work-row').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const item = btn.closest('.work-item');
+        const open = !item.classList.contains('open');
+        item.classList.toggle('open', open);
+        btn.setAttribute('aria-expanded', String(open));
+        btn.dataset.cursor = open ? 'close' : 'open';
+        setCursorLabel(btn);
+        if (open) { restartDraw(item); $('#workPreview').classList.remove('on'); }
       });
+    });
+  }
 
-      for (let i = 0; i < 4; i++) {
-        const p = el('i', 'pkt is-elbow');
-        const sx = i < 2 ? 1 : -1;
-        const sy = i % 2 ? 1 : -1;
-        p.style.setProperty('--dx', `${sx * (22 + Math.random() * 24)}px`);
-        p.style.setProperty('--dy', `${sy * (20 + Math.random() * 22)}px`);
-        p.style.animationDelay = `${40 + i * 22}ms`;
-        if (i === 0) p.classList.add('is-live');   // 一顆走訊號綠，其餘藍圖墨
-        burst.appendChild(p);
+  function restartDraw(root) {
+    $$('.draw', root).forEach((p) => { p.style.animation = 'none'; void p.getBBox(); p.style.animation = ''; });
+  }
+
+  /* ---------- 作品生成圖（viewBox 400×300） ---------- */
+  function rng(seed) { return () => ((seed = (seed * 16807) % 2147483647) / 2147483647); }
+  const grid = (sx = 40, sy = 30) => {
+    let s = '';
+    for (let x = sx; x < 400; x += sx) s += `<line class="a-grid" x1="${x}" y1="0" x2="${x}" y2="300"/>`;
+    for (let y = sy; y < 300; y += sy) s += `<line class="a-grid" x1="0" y1="${y}" x2="400" y2="${y}"/>`;
+    return s;
+  };
+  const svgWrap = (inner) => `<svg class="art" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice">${inner}</svg>`;
+
+  const ART = {
+    /* RvR：三條韌體曲線，其中一條掉了 35% */
+    rvr() {
+      const curve = (k, dip) => {
+        const pts = [];
+        for (let i = 0; i <= 40; i++) {
+          const x = 40 + i * 8.5;
+          let v = 1 / (1 + Math.exp((i - 26) / 4.2)) * 0.92 + 0.04;
+          if (dip) v *= 1 - 0.35 * Math.exp(-((i - 16) ** 2) / 60);
+          pts.push(`${i ? 'L' : 'M'}${x.toFixed(1)} ${(250 - v * 190 * k).toFixed(1)}`);
+        }
+        return pts.join(' ');
+      };
+      return svgWrap(`${grid()}
+        <path class="a-faint draw" style="--len:600" d="${curve(1)}"/>
+        <path class="a-faint draw" style="--len:600;--dl:.15s" d="${curve(0.94)}"/>
+        <path class="a-sig draw" style="--len:600;--dl:.3s" d="${curve(0.97, true)}"/>
+        <line class="a-line" x1="40" y1="250" x2="380" y2="250"/><line class="a-line" x1="40" y1="40" x2="40" y2="250"/>
+        <line x1="176" y1="78" x2="176" y2="122" stroke="var(--signal)" stroke-dasharray="3 3"/>
+        <text x="184" y="104" class="t-sig">−35%</text>
+        <text x="40" y="272">RANGE →</text><text x="40" y="30">THROUGHPUT</text>
+        <text x="300" y="30">FW A / B / C</text>`);
+    },
+    /* Bot：24 小時錶盤，簡報時間點亮 */
+    bot() {
+      let s = '';
+      const cx = 200, cy = 150;
+      for (let h = 0; h < 96; h++) {
+        const a = (h / 96) * Math.PI * 2 - Math.PI / 2;
+        const major = h % 4 === 0;
+        const r1 = major ? 96 : 102, r2 = 110;
+        s += `<line x1="${cx + Math.cos(a) * r1}" y1="${cy + Math.sin(a) * r1}" x2="${cx + Math.cos(a) * r2}" y2="${cy + Math.sin(a) * r2}" stroke="rgba(238,236,229,${major ? .5 : .18})"/>`;
+      }
+      const mark = (hr, label) => {
+        const a = (hr / 24) * Math.PI * 2 - Math.PI / 2;
+        return `<circle class="a-fill" cx="${cx + Math.cos(a) * 128}" cy="${cy + Math.sin(a) * 128}" r="4"/>
+          <text class="t-sig" x="${cx + Math.cos(a) * 146}" y="${cy + Math.sin(a) * 146 + 4}" text-anchor="middle">${label}</text>`;
+      };
+      return svgWrap(`${grid()}
+        <circle class="a-faint" cx="${cx}" cy="${cy}" r="128"/>
+        ${s}
+        <circle class="a-sig draw" style="--len:820" cx="${cx}" cy="${cy}" r="128" transform="rotate(-90 ${cx} ${cy})"/>
+        ${mark(8, '08:00')}${mark(21, '21:00')}
+        <text x="${cx}" y="${cy - 6}" text-anchor="middle" style="font-size:22px;fill:var(--paper)">24/7</text>
+        <text x="${cx}" y="${cy + 16}" text-anchor="middle">UPTIME</text>
+        <text x="20" y="30">CRON · DAILY BRIEF</text><text x="380" y="286" text-anchor="end">1.8s → 0.9s</text>`);
+    },
+    /* Tomasulo：亂序的管線甘特圖 */
+    tomasulo() {
+      const ins = [['LD', 0, 2, 3], ['MUL', 1, 6, 10], ['ADD', 2, 4, 6], ['SUB', 3, 5, 7], ['DIV', 4, 11, 15], ['ADD', 5, 7, 8]];
+      const cw = 20, x0 = 70, y0 = 54, rh = 34;
+      let s = '';
+      ins.forEach(([op, issue, ex, wb], i) => {
+        const y = y0 + i * rh;
+        s += `<text x="20" y="${y + 15}">${op} F${i * 2}</text>`;
+        s += `<rect class="a-box" x="${x0 + issue * cw}" y="${y}" width="${cw - 3}" height="20"/>`;
+        s += `<rect class="${i === 2 || i === 3 ? 'a-boxon' : 'a-box'}" x="${x0 + (issue + 1) * cw}" y="${y}" width="${(ex - issue - 1) * cw + cw - 3}" height="20"/>`;
+        s += `<rect class="a-fill" x="${x0 + (wb) * cw}" y="${y}" width="${cw - 3}" height="20" opacity="${i === 2 || i === 3 ? 1 : .35}"/>`;
+      });
+      for (let c = 0; c <= 15; c += 5) s += `<text x="${x0 + c * cw}" y="40">${c}</text>`;
+      return svgWrap(`${grid(20, 34)}${s}
+        <line class="a-sig draw" style="--len:120" x1="${x0 + 7 * cw}" y1="${y0 + 6 * rh + 8}" x2="${x0 + 11 * cw}" y2="${y0 + 6 * rh + 8}"/>
+        <text x="20" y="286">ISSUE · EXEC · WB</text><text x="380" y="286" text-anchor="end" class="t-sig">OUT OF ORDER</text>`);
+    },
+    /* Vision：追蹤框與軌跡 */
+    vision() {
+      const R = rng(7);
+      let s = '';
+      for (let i = 0; i < 70; i++) s += `<circle cx="${(R() * 400).toFixed(1)}" cy="${(R() * 300).toFixed(1)}" r="${(R() * 2.4 + .6).toFixed(1)}" fill="rgba(238,236,229,${(R() * .35 + .08).toFixed(2)})"/>`;
+      const bx = 228, by = 112, bw = 92, bh = 92;
+      const c = 16;
+      const br = `M${bx} ${by + c}V${by}H${bx + c} M${bx + bw - c} ${by}H${bx + bw}V${by + c} M${bx + bw} ${by + bh - c}V${by + bh}H${bx + bw - c} M${bx + c} ${by + bh}H${bx}V${by + bh - c}`;
+      return svgWrap(`${grid()}${s}
+        <path class="a-faint draw" style="--len:520;stroke-dasharray:4 6" d="M40 250 C 110 240, 120 160, 180 170 S 250 170, 274 158"/>
+        <circle cx="274" cy="158" r="26" fill="none" stroke="rgba(238,236,229,.5)"/>
+        <circle class="a-fill" cx="274" cy="158" r="5"/>
+        <path class="a-sig" d="${br}"/>
+        <text x="${bx}" y="${by - 10}" class="t-sig">TARGET LOCK</text>
+        <text x="20" y="30">VOICE: FOLLOW</text><text x="380" y="286" text-anchor="end">WATCHDOG OK</text>`);
+    },
+    /* COVID：23 個地區的小走勢圖 */
+    covid() {
+      const R = rng(23);
+      let s = '';
+      for (let k = 0; k < 23; k++) {
+        const col = k % 6, row = Math.floor(k / 6);
+        const ox = 22 + col * 62, oy = 44 + row * 60;
+        const ph = R() * 3, amp = R() * 0.5 + 0.5;
+        let d = '';
+        for (let i = 0; i <= 24; i++) {
+          const v = (Math.sin(i / 3 + ph) * 0.3 + Math.exp(-((i - 8 - R() * 2) ** 2) / 10) * amp + Math.exp(-((i - 19) ** 2) / 6) * amp * 0.8);
+          d += `${i ? 'L' : 'M'}${(ox + i * 2.1).toFixed(1)} ${(oy + 36 - clamp(v, 0, 1.4) * 24).toFixed(1)}`;
+        }
+        s += `<path class="${k === 9 ? 'a-sig' : 'a-faint'} draw" style="--len:140;--dl:${(k * 0.03).toFixed(2)}s" d="${d}"/>`;
+        s += `<line class="a-grid" x1="${ox}" y1="${oy + 37}" x2="${ox + 52}" y2="${oy + 37}" style="stroke:rgba(238,236,229,.2)"/>`;
+      }
+      return svgWrap(`${s}<text x="22" y="30">23 REGIONS · 3 YEARS · DAILY</text><text x="380" y="286" text-anchor="end" class="t-sig">0 NULL ROWS</text>`);
+    },
+  };
+
+  /* ---------- Stats ---------- */
+  function renderStats() {
+    $('#statsList').innerHTML = SITE.stats.map((s, i) => `
+      <li class="reveal" style="--d:${i * 0.08}s">
+        <span class="stat-num" data-count="${s.value}">0<sup>${esc(s.suffix)}</sup></span>
+        <span class="stat-label">${te(s.label)}</span>
+      </li>`).join('');
+  }
+
+  function countUp(node) {
+    const target = +node.dataset.count;
+    const sup = node.querySelector('sup').outerHTML;
+    if (reduceMotion) { node.innerHTML = target + sup; return; }
+    const t0 = performance.now(), dur = 1600;
+    const step = (now) => {
+      const k = clamp((now - t0) / dur, 0, 1);
+      node.innerHTML = Math.round(target * (1 - (1 - k) ** 4)) + sup;
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  /* ---------- About ---------- */
+  function renderAbout() {
+    const A = SITE.about;
+    $('#aboutTitle').textContent = t(UI.aboutTitle);
+    $('#aboutBody').textContent = t(A.body);
+    $('#aboutBody').className = 'about-body reveal';
+    $('#stackTitle').textContent = t(UI.stackTitle);
+    $('#offTitle').textContent = t(UI.offTitle);
+    $('#stackList').innerHTML = A.stack.map((s) => `<div><dt>${te(s.label)}</dt><dd>${te(s.items)}</dd></div>`).join('');
+    $('#offList').innerHTML = A.off.map((o) => `<div><dt>${te(o.k)}</dt><dd>${o.url
+      ? `<a href="${esc(o.url)}" target="_blank" rel="noopener noreferrer">${te(o.v)} ↗</a>` : te(o.v)}</dd></div>`).join('');
+    $('.about-cols').classList.add('reveal');
+    $('.about-cols').style.setProperty('--d', '.15s');
+  }
+
+  /* ---------- Contact ---------- */
+  function renderContact() {
+    const C = SITE.contact;
+    $('#contactKicker').textContent = t(C.kicker);
+    const [user, host] = SITE.email.split('@');
+    const mail = $('#mailLink');
+    mail.href = `mailto:${SITE.email}`;
+    mail.innerHTML = `${esc(user)}<em>@</em>${esc(host)}`;
+    mail.dataset.cursor = 'mail';
+    $('#contactBody').textContent = t(C.body);
+    const links = [
+      `<a class="btn primary" href="mailto:${esc(SITE.email)}">${LANG === 'zh' ? '寫信給我' : 'Email me'} <span class="arr" aria-hidden="true">↗</span></a>`,
+      `<button class="btn" type="button" id="copyMail">${te(UI.copy)}</button>`,
+      ...SITE.socials.map((s) => `<a class="btn" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${te(s.label)} <span class="arr" aria-hidden="true">↗</span></a>`),
+    ];
+    if (SITE.resumeUrl) links.push(`<a class="btn" href="${esc(SITE.resumeUrl)}" target="_blank" rel="noopener">${te(UI.resume)} <span class="arr" aria-hidden="true">↓</span></a>`);
+    $('#contactActions').innerHTML = links.join('');
+    $('#copyMail').addEventListener('click', copyMail);
+
+    const phrase = LANG === 'zh' ? ['一起做點東西', 'Let’s build something'] : ['Let’s build something', 'Say hello'];
+    const seq = Array.from({ length: 4 }, (_, i) => `<span>${esc(phrase[i % 2])}<i></i></span>`).join('');
+    $('#marquee').innerHTML = seq + seq;
+    $('#colophon').textContent = `© ${new Date().getFullYear()} ${SITE.profile.legalName} — ${t(UI.colophon)}`;
+  }
+
+  async function copyMail() {
+    try {
+      await navigator.clipboard.writeText(SITE.email);
+      toast(`${t(UI.copied)} — ${SITE.email}`);
+    } catch (_) {
+      location.href = `mailto:${SITE.email}`;
+    }
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    const n = $('#toast');
+    n.textContent = msg;
+    n.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => n.classList.remove('on'), 2200);
+  }
+
+  /* =====================================================================
+     時鐘
+     ===================================================================== */
+  let clockFmt = null, clockShort = null;
+  function tickClock() {
+    const tz = SITE.profile.timezone;
+    try {
+      clockFmt = clockFmt || new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZoneName: 'short' });
+      clockShort = clockShort || new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
+    } catch (_) { return; }
+    const now = new Date();
+    const long = clockFmt.format(now);
+    $$('[data-clock="long"]').forEach((n) => { n.textContent = long; });
+    $('#clockTop').textContent = `CHAMPAIGN ${clockShort.format(now)}`;
+    $('#clockBottom').textContent = `Champaign, IL ${long}`;
+  }
+
+  /* =====================================================================
+     Hero 訊號場：點陣上兩個發射源（固定的 AP + 游標）互相干涉
+     ===================================================================== */
+  function initField() {
+    const cv = $('#field');
+    const ctx = cv.getContext('2d');
+    const hero = $('.hero');
+    let W = 0, H = 0, dpr = 1, pts = [], step = 22, running = true, visible = true;
+    const mouse = { x: 0, y: 0, tx: 0, ty: 0, inside: false };
+    const ap = { x: 0, y: 0 };
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = hero.clientWidth; H = hero.clientHeight;
+      cv.width = W * dpr; cv.height = H * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      step = W < 700 ? 18 : 22;
+      pts = [];
+      for (let y = step / 2; y < H; y += step) for (let x = step / 2; x < W; x += step) pts.push(x, y);
+      ap.x = W * (W < 700 ? 0.7 : 0.74); ap.y = H * 0.3;
+      if (!mouse.inside) { mouse.x = mouse.tx = W * 0.3; mouse.y = mouse.ty = H * 0.42; }
+    }
+
+    hero.addEventListener('pointermove', (e) => {
+      const r = hero.getBoundingClientRect();
+      mouse.tx = e.clientX - r.left; mouse.ty = e.clientY - r.top; mouse.inside = true;
+    });
+    hero.addEventListener('pointerleave', () => { mouse.inside = false; });
+
+    const k = 0.045;   // 波數
+    function frame(now) {
+      if (!running) return;
+      const time = reduceMotion ? 0 : now * 0.0022;
+      if (!mouse.inside && !reduceMotion) {   // 沒有游標（或手機）時讓第二個源自己繞
+        mouse.tx = W * (0.32 + Math.sin(now * 0.00021) * 0.18);
+        mouse.ty = H * (0.42 + Math.cos(now * 0.00027) * 0.16);
+      }
+      mouse.x = lerp(mouse.x, mouse.tx, 0.08); mouse.y = lerp(mouse.y, mouse.ty, 0.08);
+      ctx.clearRect(0, 0, W, H);
+
+      const hot = [];
+      ctx.fillStyle = 'rgba(238,236,229,1)';
+      for (let i = 0; i < pts.length; i += 2) {
+        const x = pts[i], y = pts[i + 1];
+        const d1 = Math.hypot(x - ap.x, y - ap.y), d2 = Math.hypot(x - mouse.x, y - mouse.y);
+        const v = Math.cos(d1 * k - time) / (1 + d1 * 0.004) + Math.cos(d2 * k - time * 1.15) / (1 + d2 * 0.006);
+        const a = clamp(v * 0.5, -1, 1);
+        if (a > 0.62) { hot.push(x, y, a); continue; }
+        const s = 0.6 + Math.abs(a) * 1.5;
+        ctx.globalAlpha = 0.08 + Math.max(0, a) * 0.62;
+        ctx.fillRect(x - s / 2, y - s / 2, s, s);
+      }
+      ctx.fillStyle = '#d7ff4a';
+      for (let i = 0; i < hot.length; i += 3) {
+        const s = 1.6 + (hot[i + 2] - 0.62) * 6;
+        ctx.globalAlpha = 0.35 + (hot[i + 2] - 0.62) * 1.6;
+        ctx.fillRect(hot[i] - s / 2, hot[i + 1] - s / 2, s, s);
+      }
+      ctx.globalAlpha = 1;
+
+      /* AP 標記 + 游標處的估計 RSSI（自由空間路徑損耗，純粹好玩） */
+      ctx.strokeStyle = 'rgba(238,236,229,.5)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(ap.x, ap.y, 5, 0, Math.PI * 2); ctx.stroke();
+      ctx.font = '11px "Geist Mono", monospace'; ctx.fillStyle = 'rgba(238,236,229,.6)';
+      ctx.fillText('AP · 5 GHz', ap.x + 12, ap.y + 4);
+      if (finePointer && mouse.inside) {
+        const meters = Math.hypot(mouse.x - ap.x, mouse.y - ap.y) / 40 + 0.5;
+        const rssi = Math.round(-20 - (20 * Math.log10(meters) + 20 * Math.log10(5180) - 27.55));
+        const label = `${rssi} dBm · ${meters.toFixed(1)} m`;
+        const lw = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(13,13,12,.85)';
+        ctx.fillRect(mouse.x + 12, mouse.y - 29, lw + 12, 22);
+        ctx.fillStyle = '#d7ff4a';
+        ctx.fillText(label, mouse.x + 18, mouse.y - 14);
+        ctx.setLineDash([2, 4]); ctx.strokeStyle = 'rgba(215,255,74,.35)';
+        ctx.beginPath(); ctx.moveTo(ap.x, ap.y); ctx.lineTo(mouse.x, mouse.y); ctx.stroke(); ctx.setLineDash([]);
+      }
+      if (!reduceMotion) requestAnimationFrame(frame);
+    }
+
+    const io = new IntersectionObserver(([e]) => {
+      visible = e.isIntersecting;
+      const should = visible && !document.hidden;
+      if (should && !running) { running = true; requestAnimationFrame(frame); }
+      running = should;
+    });
+    io.observe(hero);
+    document.addEventListener('visibilitychange', () => {
+      const should = visible && !document.hidden;
+      if (should && !running) { running = true; requestAnimationFrame(frame); }
+      running = should;
+    });
+    window.addEventListener('resize', () => { resize(); if (reduceMotion) requestAnimationFrame(frame); });
+    if (reduceMotion) hero.addEventListener('pointermove', () => requestAnimationFrame(frame));
+    resize();
+    requestAnimationFrame(frame);
+  }
+
+  /* =====================================================================
+     游標、磁吸、預覽
+     ===================================================================== */
+  const cursor = { x: -100, y: -100, rx: -100, ry: -100, px: -100, py: -100 };
+  function setCursorLabel(target) {
+    const c = $('#cursor');
+    const kind = target && target.dataset.cursor;
+    const labels = { open: t(UI.open), close: t(UI.close), mail: LANG === 'zh' ? '寫信' : 'Write' };
+    c.classList.toggle('is-label', !!kind);
+    c.classList.toggle('is-link', !kind && !!target);
+    $('.cursor-ring em', c).textContent = kind ? labels[kind] || '' : '';
+  }
+
+  function initCursor() {
+    if (!finePointer) return;
+    document.documentElement.classList.add('has-cursor');
+    const c = $('#cursor'), dot = $('.cursor-dot', c), ring = $('.cursor-ring', c);
+    const prev = $('#workPreview');
+    let hoverArt = null;
+
+    window.addEventListener('pointermove', (e) => { cursor.x = e.clientX; cursor.y = e.clientY; }, { passive: true });
+    document.addEventListener('pointerleave', () => c.classList.add('is-hidden'));
+    document.addEventListener('pointerenter', () => c.classList.remove('is-hidden'));
+    document.addEventListener('pointerover', (e) => {
+      const target = e.target.closest('a, button, [data-cursor]');
+      setCursorLabel(target);
+      c.classList.toggle('on-light', !!e.target.closest('.contact'));
+      const item = e.target.closest('.work-item');
+      const art = item && !item.classList.contains('open') && e.target.closest('.work-row') ? item.dataset.art : null;
+      if (art !== hoverArt) {
+        hoverArt = art;
+        prev.classList.toggle('on', !!art);
+        $$('svg', prev).forEach((s) => {
+          const on = s.dataset.art === art;
+          if (on && !s.classList.contains('on')) restartDraw(s);
+          s.classList.toggle('on', on);
+        });
+      }
+    });
+
+    const loop = () => {
+      cursor.rx = lerp(cursor.rx, cursor.x, 0.18); cursor.ry = lerp(cursor.ry, cursor.y, 0.18);
+      cursor.px = lerp(cursor.px, cursor.x, 0.1); cursor.py = lerp(cursor.py, cursor.y, 0.1);
+      dot.style.transform = `translate3d(${cursor.x}px, ${cursor.y}px, 0)`;
+      ring.style.transform = `translate3d(${cursor.rx}px, ${cursor.ry}px, 0)`;
+      const tilt = clamp((cursor.x - cursor.px) * 0.15, -8, 8);
+      prev.style.transform = `translate3d(${cursor.px + 40}px, ${cursor.py}px, 0) translate(0, -50%) rotate(${tilt}deg)`;
+      requestAnimationFrame(loop);
+    };
+    loop();
+
+    /* 磁吸按鈕 */
+    document.addEventListener('pointermove', (e) => {
+      const b = e.target.closest('.btn, .lang');
+      $$('.btn.mag, .lang.mag').forEach((n) => { if (n !== b) { n.style.transform = ''; n.classList.remove('mag'); } });
+      if (!b || reduceMotion) return;
+      const r = b.getBoundingClientRect();
+      const dx = (e.clientX - r.left - r.width / 2) * 0.22, dy = (e.clientY - r.top - r.height / 2) * 0.32;
+      b.style.transform = `translate(${dx}px, ${dy}px)`;
+      b.classList.add('mag');
+    }, { passive: true });
+  }
+
+  /* =====================================================================
+     捲動：進場、Statement、Path、頁首、目前段落
+     ===================================================================== */
+  let revealIO;
+  function observeReveals() {
+    revealIO = revealIO || new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (!e.isIntersecting) return;
+        e.target.classList.add('in');
+        $$('[data-count]', e.target).forEach(countUp);
+        revealIO.unobserve(e.target);
+      });
+    }, { rootMargin: '0px 0px -12% 0px' });
+    $$('.reveal:not(.in), .line-reveal:not(.in)').forEach((n) => {
+      if (reduceMotion) { n.classList.add('in'); $$('[data-count]', n).forEach(countUp); } else revealIO.observe(n);
+    });
+  }
+
+  let lastY = 0, ticking = false;
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      ticking = false;
+      const y = window.scrollY;
+      const vh = window.innerHeight;
+
+      /* 頁首：往下捲藏起來，往上捲出現 */
+      $('#masthead').classList.toggle('is-hidden', y > vh * 0.6 && y > lastY + 2);
+      if (y < lastY - 2 || y < vh * 0.6) $('#masthead').classList.remove('is-hidden');
+      lastY = y;
+
+      /* Hero：名字往上漂、慢慢淡出 */
+      if (!reduceMotion && y < vh * 1.2) {
+        const hi = $('.hero-inner');
+        hi.style.transform = `translate3d(0, ${y * 0.32}px, 0)`;
+        hi.style.opacity = String(clamp(1 - y / (vh * 0.9), 0, 1));
       }
 
-      fx.appendChild(burst);
-      setTimeout(() => burst.remove(), 700);
-    }, { passive: true });
-  })();
+      /* Statement 逐字點亮 */
+      const st = $('#statementText');
+      const r = st.getBoundingClientRect();
+      const p = clamp((vh * 0.82 - r.top) / (r.height + vh * 0.25), 0, 1);
+      const words = st.children;
+      const n = Math.round(p * words.length);
+      for (let i = 0; i < words.length; i++) words[i].classList.toggle('on', reduceMotion || i < n);
 
-  /* ------------------------- 開機動畫 ------------------------- */
-  function boot() {
-    const box = $('#boot');
-    if (!box) return;
-    const dismiss = () => { box.classList.add('is-done'); setTimeout(() => box.remove(), 450); };
+      updatePath();
 
-    const seen = (() => { try { return sessionStorage.getItem('booted'); } catch (_) { return null; } })();
-    const lines = SITE.bootLines || [];
-    if (reduceMotion || !lines.length || seen) { box.remove(); return; }
-
-    // 保險：不管發生什麼事，2.5 秒後一定讓開機畫面消失，不會擋住整個網站
-    const failsafe = setTimeout(dismiss, 2500);
-    box.addEventListener('click', () => { clearTimeout(failsafe); dismiss(); });
-
-    const log = $('.boot-log', box);
-    let i = 0;
-    const tick = () => {
-      log.textContent += (i ? '\n' : '') + lines[i];
-      if (++i < lines.length) return setTimeout(tick, 260);
-      setTimeout(() => { clearTimeout(failsafe); dismiss(); }, 420);
-    };
-    tick();
-    try { sessionStorage.setItem('booted', '1'); } catch (_) {}
-  }
-
-  /* ------------------------- 結構化資料（給 Google 認識你） ------------------------- */
-  function injectJsonLd() {
-    const p = SITE.profile;
-    const node = document.createElement('script');
-    node.type = 'application/ld+json';
-    node.textContent = JSON.stringify({
-      '@context': 'https://schema.org',
-      '@type': 'Person',
-      name: p.name,
-      alternateName: p.nameZh || undefined,
-      jobTitle: t(p.jobTitle),
-      description: t(p.description),
-      url: SITE.siteUrl,
-      sameAs: SITE.socials.filter((s) => /^https?:/.test(s.url)).map((s) => s.url),
+      /* 目前段落 */
+      let cur = '';
+      ['work', 'path', 'about', 'contact'].forEach((id) => {
+        const s = document.getElementById(id);
+        if (s && s.getBoundingClientRect().top < vh * 0.4) cur = id;
+      });
+      $$('#menu a').forEach((a) => a.setAttribute('aria-current', String(a.dataset.sec === cur)));
     });
-    document.head.appendChild(node);
   }
 
-  /* ------------------------- 啟動 ------------------------- */
-  document.documentElement.lang = LANG === 'zh' ? 'zh-TW' : 'en';
-  buildChrome();
-  window.addEventListener('hashchange', render);
-  if (!location.hash) location.replace(`#/${navIds[0]}`);
+  /* =====================================================================
+     開場
+     ===================================================================== */
+  function boot() {
+    const loader = $('#loader');
+    const seen = session && store.get('booted', session);
+    const finish = () => {
+      loader.classList.add('is-done');
+      document.documentElement.classList.add('is-ready');
+      if (session) store.set('booted', '1', session);
+    };
+    if (seen || reduceMotion) { loader.style.transition = 'none'; finish(); return; }
+    const num = $('#loaderNum'), bar = $('#loaderBar');
+    const t0 = performance.now(), dur = 1500;
+    const step = (now) => {
+      const k = clamp((now - t0) / dur, 0, 1);
+      const e = 1 - (1 - k) ** 3;
+      num.textContent = Math.round(-90 + e * 60);
+      bar.style.transform = `scaleX(${e})`;
+      if (k < 1) requestAnimationFrame(step);
+      else setTimeout(finish, 180);
+    };
+    requestAnimationFrame(step);
+  }
+
+  /* =====================================================================
+     結構化資料（JSON-LD）
+     ===================================================================== */
+  function injectJsonLd() {
+    const P = SITE.profile;
+    const data = {
+      '@context': 'https://schema.org', '@type': 'Person',
+      name: P.name, alternateName: [P.nameZh, P.legalName],
+      jobTitle: P.jobTitle.en, url: SITE.siteUrl + '/', email: `mailto:${SITE.email}`,
+      alumniOf: [{ '@type': 'CollegeOrUniversity', name: 'Yuan Ze University' }],
+      affiliation: { '@type': 'CollegeOrUniversity', name: 'University of Illinois Urbana-Champaign' },
+      sameAs: SITE.socials.map((s) => s.url),
+    };
+    const s = document.createElement('script');
+    s.type = 'application/ld+json';
+    s.textContent = JSON.stringify(data);
+    document.head.appendChild(s);
+  }
+
+  /* =====================================================================
+     啟動
+     ===================================================================== */
   render();
   injectJsonLd();
+  initField();
+  initCursor();
   boot();
+  setInterval(tickClock, 1000);
+
+  $('#langToggle').addEventListener('click', () => setLang(LANG === 'zh' ? 'en' : 'zh'));
+  document.addEventListener('keydown', (e) => {
+    if (e.target.closest('input, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === 'l' || e.key === 'L') setLang(LANG === 'zh' ? 'en' : 'zh');
+  });
+  window.addEventListener('scroll', onScroll, { passive: true });
+  let rt;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { drawPathChart(); onScroll(); }, 120); });
+  /* 字體載入後量測會變，重畫一次圖 */
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawPathChart);
 })();
