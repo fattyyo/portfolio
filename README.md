@@ -1,6 +1,6 @@
 # Eric Wang — Portfolio
 
-個人網站，線上網址：**https://fattyyo.github.io/portfolio/**
+個人網站，線上網址：**https://fattyyo.com/portfolio/**
 
 **零建置**：純 HTML + CSS + 原生 JS，沒有框架、沒有 npm。雙擊 `index.html` 或起一個本機伺服器就能看：
 
